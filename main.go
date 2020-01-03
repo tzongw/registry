@@ -9,6 +9,6 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 	client := redis.NewClient(&redis.Options{})
 	s := NewService(client)
-	s.Start()
+	s.Start(map[string]string{})
 	select {}
 }
