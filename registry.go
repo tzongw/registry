@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/go-redis/redis"
 	log "github.com/sirupsen/logrus"
+	"strings"
 	"time"
 )
 
@@ -20,14 +21,27 @@ type tServiceMap map[string]tAddresses
 type service struct {
 	services   tServices
 	serviceMap tServiceMap
-	client *redis.Client
+	client     *redis.Client
+}
+
+func keyPrefix(name string) string {
+	return PREFIX + ":" + name
+}
+
+func fullKey(name, address string) string {
+	return keyPrefix(name) + ":" + address
+}
+
+func unpack(key string) (string, string) {
+	ss := strings.SplitN(key, ":", 3)
+	return ss[1], ss[2]
 }
 
 func NewService(client *redis.Client) *service {
 	s := &service{
 		services:   make(tServices),
 		serviceMap: make(tServiceMap),
-		client:client,
+		client:     client,
 	}
 	return s
 }
@@ -51,6 +65,12 @@ func (s *service) unregister() {
 
 func (s *service) refresh() {
 	log.Debug("refresh")
+	keys, err := s.client.Keys(PREFIX+"*").Result()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	log.Debug(keys)
 }
 
 func (s *service) run() {
