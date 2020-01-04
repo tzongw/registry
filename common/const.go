@@ -1,4 +1,4 @@
-package main
+package common
 
 const (
 	MissTimes = 3

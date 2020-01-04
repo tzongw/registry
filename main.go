@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/apache/thrift/lib/go/thrift"
 	log "github.com/sirupsen/logrus"
+	"registry/common"
 	"tutorial"
 )
 
@@ -27,7 +28,7 @@ func main() {
 	log.SetLevel(log.InfoLevel)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	s := "tutorial"
-	registry.Start(map[string]string{s: "localhost:19090"})
+	common.registry.Start(map[string]string{s: "localhost:19090"})
 	select {}
 }
 
