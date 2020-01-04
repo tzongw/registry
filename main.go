@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/go-redis/redis"
 	log "github.com/sirupsen/logrus"
+	"math/rand"
+	"time"
 	"tutorial"
 )
 
@@ -22,7 +24,12 @@ func test() {
 	c := NewClient("127.0.0.1:19090", nil)
 	cli := tutorial.NewCalculatorClient(c)
 	for i := 0; i < 10; i += 1 {
-		go handleClient(cli)
+		go func() {
+			for {
+				handleClient(cli)
+				time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+			}
+		}()
 	}
 }
 
