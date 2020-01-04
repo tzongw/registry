@@ -11,7 +11,7 @@ type client struct {
 }
 
 type Client struct {
-	p *pool
+	p *Pool
 }
 
 func NewClient(addr string, opt *Options) *Client {

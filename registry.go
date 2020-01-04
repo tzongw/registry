@@ -11,14 +11,14 @@ import (
 )
 
 const (
-	PREFIX           = "service"
-	REFRESH_INTERVAL = 3 * time.Second
-	TTL              = MISS_TIMES * REFRESH_INTERVAL
-	COOL_DOWN        = TTL + REFRESH_INTERVAL
+	Prefix          = "service"
+	RefreshInterval = 3 * time.Second
+	TTL             = MissTimes * RefreshInterval
+	CoolDown        = TTL + RefreshInterval
 )
 
-type tAddresses []string
-type tServiceMap map[string]tAddresses
+type Addresses []string
+type ServiceMap map[string]Addresses
 
 type Registry struct {
 	services   map[string]string
@@ -27,7 +27,7 @@ type Registry struct {
 }
 
 func keyPrefix(name string) string {
-	return PREFIX + ":" + name
+	return Prefix + ":" + name
 }
 
 func fullKey(name, address string) string {
@@ -57,8 +57,8 @@ func (s *Registry) Stop() {
 	s.unregister()
 }
 
-func (s *Registry) Addresses(name string) tAddresses {
-	m, ok := s.serviceMap.Load().(tServiceMap)
+func (s *Registry) Addresses(name string) Addresses {
+	m, ok := s.serviceMap.Load().(ServiceMap)
 	if !ok {
 		return nil
 	}
@@ -75,19 +75,19 @@ func (s *Registry) unregister() {
 		keys = append(keys, fullKey(name, address))
 	}
 	s.client.Del(keys...)
-	s.client.Publish(PREFIX, "unregister")
+	s.client.Publish(Prefix, "unregister")
 }
 
 func (s *Registry) refresh() {
 	log.Debug("refresh")
-	keys, err := s.client.Keys(PREFIX + "*").Result()
+	keys, err := s.client.Keys(Prefix + "*").Result()
 	if err != nil {
 		log.Error(err)
 		return
 	}
 	sort.Strings(keys) // DeepEqual needs
 	log.Debug(keys)
-	sm := make(tServiceMap)
+	sm := make(ServiceMap)
 	for _, key := range keys {
 		name, address := unpack(key)
 		sm[name] = append(sm[name], address)
@@ -101,7 +101,7 @@ func (s *Registry) refresh() {
 func (s *Registry) run() {
 	log.Debug("run")
 	published := false
-	sub := s.client.Subscribe(PREFIX)
+	sub := s.client.Subscribe(Prefix)
 	for {
 		if len(s.services) > 0 {
 			s.client.Pipelined(func(p redis.Pipeliner) error {
@@ -117,7 +117,7 @@ func (s *Registry) run() {
 			}
 		}
 		s.refresh()
-		if m, _ := sub.ReceiveTimeout(REFRESH_INTERVAL); m != nil {
+		if m, _ := sub.ReceiveTimeout(RefreshInterval); m != nil {
 			log.Info(m)
 		}
 	}

@@ -1,3 +1,3 @@
 package main
 
-const MISS_TIMES = 3
+const MissTimes = 3

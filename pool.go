@@ -33,7 +33,7 @@ func (e *PoolError) Error() string {
 	return e.text
 }
 
-type pool struct {
+type Pool struct {
 	factory Factory
 	opt     *Options
 	ch      chan interface{}
@@ -42,17 +42,17 @@ type pool struct {
 	m       sync.Mutex
 }
 
-func NewPool(factory Factory, opt *Options) *pool {
+func NewPool(factory Factory, opt *Options) *Pool {
 	if opt == nil {
 		opt = DefaultOptions()
 	}
-	return &pool{
+	return &Pool{
 		factory: factory,
 		opt:     opt,
 		ch:      make(chan interface{}, opt.PoolSize)}
 }
 
-func (p *pool) Close() {
+func (p *Pool) Close() {
 	p.m.Lock()
 	defer p.m.Unlock()
 	p.closed = true
@@ -66,7 +66,7 @@ func (p *pool) Close() {
 	}
 }
 
-func (p *pool) Get() (interface{}, error) {
+func (p *Pool) Get() (interface{}, error) {
 	p.m.Lock()
 	if len(p.ch) > 0 {
 		defer p.m.Unlock()
@@ -96,7 +96,7 @@ func (p *pool) Get() (interface{}, error) {
 	}
 }
 
-func (p *pool) Put(i interface{}, err error) {
+func (p *Pool) Put(i interface{}, err error) {
 	p.m.Lock()
 	defer p.m.Unlock()
 	if err != nil || p.closed {
