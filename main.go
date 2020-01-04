@@ -6,12 +6,11 @@ import (
 	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/go-redis/redis"
 	log "github.com/sirupsen/logrus"
-	"math/rand"
 	"time"
 	"tutorial"
 )
 
-func test()  {
+func test() {
 	var e error
 	e = tutorial.NewInvalidOperation()
 	if err, ok := e.(error); ok {
@@ -35,16 +34,11 @@ func main() {
 	r.Start(map[string]string{s: "localhost:19090"})
 	c := NewServiceClient(r, s, nil)
 	cli := tutorial.NewCalculatorClient(c)
-	c = NewServiceClient(r, RpcUser, nil)
-	c = NewServiceClient(r, RpcGate, nil)
-	for i := 0; i < 0; i += 1 {
-		go func() {
-			for {
-				handleClient(cli)
-				time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
-			}
-		}()
-	}
+	time.AfterFunc(2*time.Second, func() {
+		handleClient(cli)
+	})
+	NewServiceClient(r, RpcUser, nil)
+	NewServiceClient(r, RpcGate, nil)
 	select {}
 }
 
