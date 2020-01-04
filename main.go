@@ -14,7 +14,7 @@ func main() {
 	log.SetLevel(log.ErrorLevel)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	client := redis.NewClient(&redis.Options{})
-	s := NewService(client)
+	s := NewRegistry(client)
 	s.Start(map[string]string{"aa": "bb", "cc": "dd"})
 	test()
 	select {}

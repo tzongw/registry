@@ -71,3 +71,16 @@ func (t *thriftFactory) Close(conn interface{}) error {
 	c := conn.(*client)
 	return c.trans.Close()
 }
+
+type ServiceClient struct {
+	service  string
+	registry *Registry
+	clients  []Client
+}
+
+func NewServiceClient(registry *Registry, service string, opt *Options) *ServiceClient {
+	return &ServiceClient{
+		registry: registry,
+		service:  service,
+	}
+}

@@ -19,7 +19,7 @@ const (
 type tAddresses []string
 type tServiceMap map[string]tAddresses
 
-type service struct {
+type Registry struct {
 	services   map[string]string
 	serviceMap atomic.Value
 	client     *redis.Client
@@ -38,14 +38,14 @@ func unpack(key string) (string, string) {
 	return ss[1], ss[2]
 }
 
-func NewService(client *redis.Client) *service {
-	s := &service{
+func NewRegistry(client *redis.Client) *Registry {
+	s := &Registry{
 		client: client,
 	}
 	return s
 }
 
-func (s *service) Start(services map[string]string) {
+func (s *Registry) Start(services map[string]string) {
 	log.Info("start")
 	s.services = services
 	s.unregister()
@@ -53,11 +53,11 @@ func (s *service) Start(services map[string]string) {
 	time.AfterFunc(time.Second, s.run)
 }
 
-func (s *service) Stop() {
+func (s *Registry) Stop() {
 	s.unregister()
 }
 
-func (s *service) Addresses(name string) tAddresses {
+func (s *Registry) Addresses(name string) tAddresses {
 	m, ok := s.serviceMap.Load().(tServiceMap)
 	if !ok {
 		return nil
@@ -65,7 +65,7 @@ func (s *service) Addresses(name string) tAddresses {
 	return m[name]
 }
 
-func (s *service) unregister() {
+func (s *Registry) unregister() {
 	log.Debug("unregister")
 	if len(s.services) == 0 {
 		return
@@ -78,7 +78,7 @@ func (s *service) unregister() {
 	s.client.Publish(PREFIX, "unregister")
 }
 
-func (s *service) refresh() {
+func (s *Registry) refresh() {
 	log.Debug("refresh")
 	keys, err := s.client.Keys(PREFIX + "*").Result()
 	if err != nil {
@@ -97,7 +97,7 @@ func (s *service) refresh() {
 	}
 }
 
-func (s *service) run() {
+func (s *Registry) run() {
 	log.Debug("run")
 	published := false
 	sub := s.client.Subscribe(PREFIX)
