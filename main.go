@@ -27,8 +27,7 @@ func test()  {
 }
 
 func main() {
-	test()
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.InfoLevel)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	client := redis.NewClient(&redis.Options{})
 	r := NewRegistry(client)
@@ -36,7 +35,9 @@ func main() {
 	r.Start(map[string]string{s: "localhost:19090"})
 	c := NewServiceClient(r, s, nil)
 	cli := tutorial.NewCalculatorClient(c)
-	for i := 0; i < 10; i += 1 {
+	c = NewServiceClient(r, RpcUser, nil)
+	c = NewServiceClient(r, RpcGate, nil)
+	for i := 0; i < 0; i += 1 {
 		go func() {
 			for {
 				handleClient(cli)

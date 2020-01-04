@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/apache/thrift/lib/go/thrift"
+	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"sync"
 	"time"
@@ -32,6 +33,10 @@ func (c *Client) Call(ctx context.Context, method string, args, result thrift.TS
 	err = cc.(*client).Call(ctx, method, args, result)
 	c.p.Put(cc, err)
 	return err
+}
+
+func (c *Client) Close() {
+	c.p.Close()
 }
 
 type ThriftFactory struct {
@@ -86,10 +91,36 @@ type ServiceClient struct {
 }
 
 func NewServiceClient(registry *Registry, service string, opt *Options) *ServiceClient {
-	return &ServiceClient{
+	c := &ServiceClient{
 		registry: registry,
 		service:  service,
+		opt:      opt,
 		clients:  make(map[string]*Client),
+	}
+	go c.watch()
+	return c
+}
+
+func (c *ServiceClient) watch() {
+	cond := c.registry.C
+	for {
+		cond.L.Lock()
+		cond.Wait()
+		cond.L.Unlock()
+		log.Infof("watch %+v", c.service)
+		addresses := c.registry.Addresses(c.service)
+		c.m.Lock()
+		for addr, client := range c.clients {
+			index := FindIndex(len(addresses), func(i int) bool {
+				return addresses[i] == c.service
+			})
+			if index < 0 {
+				log.Warnf("close client %+v %+v", c.service, addr)
+				client.Close()
+				delete(c.clients, addr)
+			}
+		}
+		c.m.Unlock()
 	}
 }
 

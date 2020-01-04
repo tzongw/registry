@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -17,13 +18,13 @@ const (
 	CoolDown        = TTL + RefreshInterval
 )
 
-type Addresses []string
-type ServiceMap map[string]Addresses
+type ServiceMap map[string]sort.StringSlice
 
 type Registry struct {
 	services   map[string]string
 	serviceMap atomic.Value
 	client     *redis.Client
+	C          *sync.Cond
 }
 
 func keyPrefix(name string) string {
@@ -42,6 +43,7 @@ func unpack(key string) (string, string) {
 func NewRegistry(client *redis.Client) *Registry {
 	return &Registry{
 		client: client,
+		C:      sync.NewCond(&sync.Mutex{}),
 	}
 }
 
@@ -57,7 +59,7 @@ func (s *Registry) Stop() {
 	s.unregister()
 }
 
-func (s *Registry) Addresses(name string) Addresses {
+func (s *Registry) Addresses(name string) sort.StringSlice {
 	m, ok := s.serviceMap.Load().(ServiceMap)
 	if !ok {
 		return nil
@@ -95,6 +97,7 @@ func (s *Registry) refresh() {
 	if m := s.serviceMap.Load(); !reflect.DeepEqual(m, sm) {
 		log.Infof("update %+v -> %+v", m, sm)
 		s.serviceMap.Store(sm)
+		s.C.Broadcast()
 	}
 }
 
