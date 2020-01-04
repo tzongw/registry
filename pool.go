@@ -6,10 +6,12 @@ import (
 	"time"
 )
 
-type Options struct {
-	Create func() (interface{}, error)
-	Close  func(interface{}) error
+type Factory interface {
+	Open() (interface{}, error)
+	Close(interface{}) error
+}
 
+type Options struct {
 	PoolSize    int
 	PoolTimeout time.Duration
 	IdleTimeout time.Duration // TODO:
@@ -17,8 +19,6 @@ type Options struct {
 
 func DefaultOptions() *Options {
 	return &Options{
-		Create:      nil,
-		Close:       nil,
 		PoolSize:    128,
 		PoolTimeout: 3 * time.Second,
 		IdleTimeout: time.Hour,
@@ -34,20 +34,36 @@ func (e *PoolError) Error() string {
 }
 
 type pool struct {
-	opt  *Options
-	ch   chan interface{}
-	size int
-	m    sync.Mutex
+	factory Factory
+	opt     *Options
+	ch      chan interface{}
+	size    int
+	closed  bool
+	m       sync.Mutex
 }
 
-func NewPool(opt *Options) *pool {
+func NewPool(factory Factory, opt *Options) *pool {
+	if opt == nil {
+		opt = DefaultOptions()
+	}
 	return &pool{
-		opt: opt,
-		ch:  make(chan interface{}, opt.PoolSize)}
+		factory: factory,
+		opt:     opt,
+		ch:      make(chan interface{}, opt.PoolSize)}
 }
 
-func Close() {
-
+func (p *pool) Close() {
+	p.m.Lock()
+	defer p.m.Unlock()
+	p.closed = true
+	for {
+		select {
+		case i := <-p.ch:
+			p.factory.Close(i)
+		default:
+			break
+		}
+	}
 }
 
 func (p *pool) Get() (interface{}, error) {
@@ -68,8 +84,8 @@ func (p *pool) Get() (interface{}, error) {
 		}
 	} else {
 		p.size += 1
-		p.m.Unlock() // create may slow
-		i, err := p.opt.Create()
+		p.m.Unlock() // Open may slow
+		i, err := p.factory.Open()
 		if err != nil {
 			log.Error(err)
 			p.m.Lock()
@@ -81,10 +97,11 @@ func (p *pool) Get() (interface{}, error) {
 }
 
 func (p *pool) Put(i interface{}, err error) {
-	if err != nil || i == nil {
-		p.m.Lock()
+	p.m.Lock()
+	defer p.m.Unlock()
+	if err != nil || p.closed {
+		p.factory.Close(i)
 		p.size -= 1
-		p.m.Unlock()
 		return
 	}
 	p.ch <- i
