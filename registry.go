@@ -97,7 +97,9 @@ func (s *Registry) refresh() {
 	if m := s.serviceMap.Load(); !reflect.DeepEqual(m, sm) {
 		log.Infof("update %+v -> %+v", m, sm)
 		s.serviceMap.Store(sm)
+		s.C.L.Lock()
 		s.C.Broadcast()
+		s.C.L.Unlock()
 	}
 }
 

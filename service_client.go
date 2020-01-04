@@ -105,23 +105,27 @@ func (c *ServiceClient) watch() {
 	cond := c.registry.C
 	for {
 		cond.L.Lock()
+		c.clean()
 		cond.Wait()
 		cond.L.Unlock()
 		log.Infof("watch %+v", c.service)
-		addresses := c.registry.Addresses(c.service)
-		c.m.Lock()
-		for addr, client := range c.clients {
-			index := FindIndex(len(addresses), func(i int) bool {
-				return addresses[i] == c.service
-			})
-			if index < 0 {
-				log.Warnf("close client %+v %+v", c.service, addr)
-				client.Close()
-				delete(c.clients, addr)
-			}
-		}
-		c.m.Unlock()
 	}
+}
+
+func (c *ServiceClient) clean() {
+	addresses := c.registry.Addresses(c.service)
+	c.m.Lock()
+	for addr, client := range c.clients {
+		index := FindIndex(len(addresses), func(i int) bool {
+			return addresses[i] == addr
+		})
+		if index < 0 {
+			log.Warnf("close client %+v %+v", c.service, addr)
+			client.Close()
+			delete(c.clients, addr)
+		}
+	}
+	c.m.Unlock()
 }
 
 func (c *ServiceClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
