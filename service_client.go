@@ -30,12 +30,7 @@ func (c *Client) Call(ctx context.Context, method string, args, result thrift.TS
 		return err
 	}
 	err = cc.(*client).Call(ctx, method, args, result)
-	switch err.(type) {
-	case thrift.TException:
-		c.p.Put(cc, err)
-	default:
-		c.p.Put(cc, nil)
-	}
+	c.p.Put(cc, err)
 	return err
 }
 
@@ -105,7 +100,6 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 	}
 	i := rand.Intn(len(addresses))
 	addr := addresses[i]
-	var client *Client
 	c.m.Lock()
 	client, ok := c.clients[addr]
 	if !ok {

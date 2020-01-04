@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/go-redis/redis"
 	log "github.com/sirupsen/logrus"
 	"math/rand"
@@ -10,7 +11,23 @@ import (
 	"tutorial"
 )
 
+func test()  {
+	var e error
+	e = tutorial.NewInvalidOperation()
+	if err, ok := e.(error); ok {
+		println("error", err)
+	}
+	if err, ok := e.(thrift.TException); ok {
+		println("execpt", err)
+	}
+	if err, ok := e.(thrift.TApplicationException); ok {
+		println("app", err)
+	}
+	return
+}
+
 func main() {
+	test()
 	log.SetLevel(log.DebugLevel)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	client := redis.NewClient(&redis.Options{})
