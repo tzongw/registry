@@ -4,6 +4,7 @@ import (
 	"github.com/go-redis/redis"
 	log "github.com/sirupsen/logrus"
 	"reflect"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -39,10 +40,9 @@ func unpack(key string) (string, string) {
 }
 
 func NewRegistry(client *redis.Client) *Registry {
-	s := &Registry{
+	return &Registry{
 		client: client,
 	}
-	return s
 }
 
 func (s *Registry) Start(services map[string]string) {
@@ -85,6 +85,7 @@ func (s *Registry) refresh() {
 		log.Error(err)
 		return
 	}
+	sort.Strings(keys) // DeepEqual needs
 	log.Debug(keys)
 	sm := make(tServiceMap)
 	for _, key := range keys {

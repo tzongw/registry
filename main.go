@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	log.SetLevel(log.ErrorLevel)
+	log.SetLevel(log.DebugLevel)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	client := redis.NewClient(&redis.Options{})
 	s := NewRegistry(client)

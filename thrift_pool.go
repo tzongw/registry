@@ -75,12 +75,17 @@ func (t *thriftFactory) Close(conn interface{}) error {
 type ServiceClient struct {
 	service  string
 	registry *Registry
-	clients  []Client
+	clients  map[string]*Client
 }
 
 func NewServiceClient(registry *Registry, service string, opt *Options) *ServiceClient {
 	return &ServiceClient{
 		registry: registry,
 		service:  service,
+		clients:  make(map[string]*Client),
 	}
+}
+
+func (c *ServiceClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
+	return nil
 }
