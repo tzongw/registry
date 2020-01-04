@@ -57,6 +57,14 @@ func (s *service) Stop() {
 	s.unregister()
 }
 
+func (s *service) Addresses(name string) tAddresses {
+	m, ok := s.serviceMap.Load().(tServiceMap)
+	if !ok {
+		return nil
+	}
+	return m[name]
+}
+
 func (s *service) unregister() {
 	log.Debug("unregister")
 	if len(s.services) == 0 {
@@ -91,11 +99,25 @@ func (s *service) refresh() {
 
 func (s *service) run() {
 	log.Debug("run")
-	t := time.Tick(REFRESH_INTERVAL)
+	published := false
+	sub := s.client.Subscribe(PREFIX)
 	for {
-		select {
-		case <-t:
-			s.refresh()
+		if len(s.services) > 0 {
+			s.client.Pipelined(func(p redis.Pipeliner) error {
+				for name, addr := range s.services {
+					key := fullKey(name, addr)
+					p.Set(key, "", TTL)
+				}
+				return nil
+			})
+			if !published {
+				published = true
+				log.Info("publish ", s.services)
+			}
+		}
+		s.refresh()
+		if m, _ := sub.ReceiveTimeout(REFRESH_INTERVAL); m != nil {
+			log.Info(m)
 		}
 	}
 }
