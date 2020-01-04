@@ -14,14 +14,10 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	client := redis.NewClient(&redis.Options{})
-	s := NewRegistry(client)
-	s.Start(map[string]string{"aa": "bb", "cc": "dd"})
-	test()
-	select {}
-}
-
-func test() {
-	c := NewClient("127.0.0.1:19090", nil)
+	r := NewRegistry(client)
+	s := "tutorial"
+	r.Start(map[string]string{s: "localhost:19090"})
+	c := NewServiceClient(r, s, nil)
 	cli := tutorial.NewCalculatorClient(c)
 	for i := 0; i < 10; i += 1 {
 		go func() {
@@ -31,6 +27,7 @@ func test() {
 			}
 		}()
 	}
+	select {}
 }
 
 var defaultCtx = context.Background()
@@ -39,7 +36,11 @@ func handleClient(client *tutorial.CalculatorClient) (err error) {
 	client.Ping(defaultCtx)
 	fmt.Println("ping()")
 
-	sum, _ := client.Add(defaultCtx, 1, 1)
+	sum, err := client.Add(defaultCtx, 1, 1)
+	if err != nil {
+		fmt.Println("add error:", err)
+		return
+	}
 	fmt.Print("1+1=", sum, "\n")
 
 	work := tutorial.NewWork()

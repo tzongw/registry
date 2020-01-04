@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )
+
+var ErrTimeout = errors.New("pool timeout")
 
 type Factory interface {
 	Open() (interface{}, error)
@@ -23,14 +26,6 @@ func DefaultOptions() *Options {
 		PoolTimeout: 3 * time.Second,
 		IdleTimeout: time.Hour,
 	}
-}
-
-type PoolError struct {
-	text string
-}
-
-func (e *PoolError) Error() string {
-	return e.text
 }
 
 type Pool struct {
@@ -80,7 +75,7 @@ func (p *Pool) Get() (interface{}, error) {
 			return i, nil
 		case <-t.C:
 			log.Warnf("timeout %d", p.opt.PoolTimeout)
-			return nil, &PoolError{"timeout"}
+			return nil, ErrTimeout
 		}
 	} else {
 		p.size += 1
