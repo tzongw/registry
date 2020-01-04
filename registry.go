@@ -70,7 +70,7 @@ func (s *service) unregister() {
 	if len(s.services) == 0 {
 		return
 	}
-	keys := make([]string, len(s.services))
+	keys := make([]string, 0, len(s.services))
 	for name, address := range s.services {
 		keys = append(keys, fullKey(name, address))
 	}
