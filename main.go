@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/apache/thrift/lib/go/thrift"
-	"github.com/go-redis/redis"
 	log "github.com/sirupsen/logrus"
-	"time"
 	"tutorial"
 )
 
@@ -28,17 +26,8 @@ func test() {
 func main() {
 	log.SetLevel(log.InfoLevel)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
-	client := redis.NewClient(&redis.Options{})
-	r := NewRegistry(client)
 	s := "tutorial"
-	r.Start(map[string]string{s: "localhost:19090"})
-	c := NewServiceClient(r, s, nil)
-	cli := tutorial.NewCalculatorClient(c)
-	time.AfterFunc(2*time.Second, func() {
-		handleClient(cli)
-	})
-	NewServiceClient(r, RpcUser, nil)
-	NewServiceClient(r, RpcGate, nil)
+	registry.Start(map[string]string{s: "localhost:19090"})
 	select {}
 }
 
