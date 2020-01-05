@@ -21,7 +21,12 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	client := newClient(connId, conn)
 	clients.Store(connId, client)
 	defer clients.Delete(connId)
-	err = shared.UserClient.Login(shared.DefaultCtx, rpcAddr, connId, nil)
+	v := r.URL.Query()
+	params := make(map[string]string, len(v))
+	for k := range v {
+		params[k] = v.Get(k)
+	}
+	err = shared.UserClient.Login(shared.DefaultCtx, rpcAddr, connId, params)
 	if err != nil {
 		log.Error(err)
 		return
