@@ -56,7 +56,7 @@ func (p *Pool) Close() {
 		case i := <-p.ch:
 			p.factory.Close(i)
 		default:
-			break
+			return
 		}
 	}
 }

@@ -69,7 +69,7 @@ func (c *client) Serve() {
 		mType, message, err := c.conn.ReadMessage()
 		if err != nil {
 			log.Warn(err)
-			break
+			return
 		}
 		switch mType {
 		case websocket.BinaryMessage:
