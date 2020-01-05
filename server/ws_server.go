@@ -26,7 +26,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		log.Error(err)
 		return
 	}
-	client.serve()
+	client.Serve()
 }
 
 func WsServe(addr string) string {

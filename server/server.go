@@ -46,13 +46,21 @@ func newClient(id string, conn *websocket.Conn) *client {
 	}
 }
 
-func (c *client) serve() {
+func (c *client) Serve() {
 	log.Debug("serve start ", c.id)
-	defer log.Debug("serve stop ", c.id)
-	defer c.stop()
+	defer func() {
+		log.Debug("serve stop ", c.id)
+		shared.UserClient.Disconnect(shared.DefaultCtx, rpcAddr, c.id, c.context)
+		c.Stop()
+	}()
 	go c.ping()
 	go c.write()
 	c.conn.SetReadLimit(maxMessageSize)
+	h := c.conn.PingHandler()
+	c.conn.SetPingHandler(func(appData string) error {
+		c.conn.SetReadDeadline(time.Now().Add(readWait))
+		return h(appData)
+	})
 	for {
 		c.conn.SetReadDeadline(time.Now().Add(readWait))
 		mType, message, err := c.conn.ReadMessage()
@@ -71,7 +79,7 @@ func (c *client) serve() {
 	}
 }
 
-func (c *client) stop() {
+func (c *client) Stop() {
 	if atomic.CompareAndSwapInt32(&c.stopped, 0, 1) {
 		close(c.writeC)
 	}
