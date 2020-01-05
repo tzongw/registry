@@ -21,10 +21,11 @@ const (
 type ServiceMap map[string]sort.StringSlice
 
 type Registry struct {
-	services   map[string]string
-	serviceMap atomic.Value
-	client     *redis.Client
-	C          *sync.Cond
+	services     map[string]string
+	serviceMap   atomic.Value
+	client       *redis.Client
+	m            sync.Mutex
+	afterRefresh []func()
 }
 
 func keyPrefix(name string) string {
@@ -43,7 +44,6 @@ func unpack(key string) (string, string) {
 func NewRegistry(client *redis.Client) *Registry {
 	return &Registry{
 		client: client,
-		C:      sync.NewCond(&sync.Mutex{}),
 	}
 }
 
@@ -97,10 +97,18 @@ func (s *Registry) refresh() {
 	if m := s.serviceMap.Load(); !reflect.DeepEqual(m, sm) {
 		log.Infof("update %+v -> %+v", m, sm)
 		s.serviceMap.Store(sm)
-		s.C.L.Lock()
-		s.C.Broadcast()
-		s.C.L.Unlock()
+		s.m.Lock()
+		for _, cb := range s.afterRefresh {
+			cb()
+		}
+		s.m.Unlock()
 	}
+}
+
+func (s *Registry) AddCallback(cb func()) {
+	s.m.Lock()
+	s.afterRefresh = append(s.afterRefresh, cb)
+	s.m.Unlock()
 }
 
 func (s *Registry) run() {

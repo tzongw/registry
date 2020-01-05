@@ -97,22 +97,12 @@ func NewServiceClient(registry *Registry, service string, opt *Options) *Service
 		opt:      opt,
 		clients:  make(map[string]*Client),
 	}
-	go c.watch()
+	registry.AddCallback(c.clean)
 	return c
 }
 
-func (c *ServiceClient) watch() {
-	cond := c.registry.C
-	for {
-		cond.L.Lock()
-		c.clean()
-		cond.Wait()
-		cond.L.Unlock()
-		log.Infof("watch %+v", c.service)
-	}
-}
-
 func (c *ServiceClient) clean() {
+	log.Infof("watch %+v", c.service)
 	addresses := c.registry.Addresses(c.service)
 	c.m.Lock()
 	for addr, client := range c.clients {
