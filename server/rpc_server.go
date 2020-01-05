@@ -7,6 +7,8 @@ import (
 	"registry/gen-go/service"
 )
 
+var RpcAddr string
+
 type gateHandler struct {
 }
 
@@ -57,6 +59,7 @@ func RpcServe() (addr string) {
 		log.Fatal(err)
 	}
 	addr = host + ":" + port
+	RpcAddr = addr
 	transportFactory := thrift.NewTBufferedTransportFactory(8192)
 	protocolFactory := thrift.NewTBinaryProtocolFactoryDefault()
 	handler := &gateHandler{}
