@@ -15,30 +15,6 @@ type client struct {
 	trans thrift.TTransport
 }
 
-type Client struct {
-	p *Pool
-}
-
-func NewClient(addr string, opt *Options) *Client {
-	return &Client{
-		p: NewPool(NewThriftFactory(addr), opt),
-	}
-}
-
-func (c *Client) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
-	cc, err := c.p.Get()
-	if err != nil {
-		return err
-	}
-	err = cc.(*client).Call(ctx, method, args, result)
-	c.p.Put(cc, err)
-	return err
-}
-
-func (c *Client) Close() {
-	c.p.Close()
-}
-
 type ThriftFactory struct {
 	addr             string
 	transportFactory thrift.TTransportFactory
@@ -74,6 +50,30 @@ func (t *ThriftFactory) Open() (interface{}, error) {
 func (t *ThriftFactory) Close(conn interface{}) error {
 	c := conn.(*client)
 	return c.trans.Close()
+}
+
+type Client struct {
+	p *Pool
+}
+
+func NewClient(addr string, opt *Options) *Client {
+	return &Client{
+		p: NewPool(NewThriftFactory(addr), opt),
+	}
+}
+
+func (c *Client) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
+	cc, err := c.p.Get()
+	if err != nil {
+		return err
+	}
+	err = cc.(*client).Call(ctx, method, args, result)
+	c.p.Put(cc, err)
+	return err
+}
+
+func (c *Client) Close() {
+	c.p.Close()
 }
 
 var ErrNoneAvailable = errors.New("none available")
