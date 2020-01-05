@@ -42,19 +42,31 @@ func (g *gateHandler) BroadcastText(ctx context.Context, group string, exclude [
 	return
 }
 
-func rpcServe() {
-	var transport thrift.TServerTransport
-	transport, err := thrift.NewTServerSocket("addr")
+func RpcServe() (addr string) {
+	transport, err := thrift.NewTServerSocket(":0")
 	if err != nil {
 		log.Fatal(err)
 	}
+	err = transport.Listen()
+	if err != nil {
+		log.Fatal(err)
+	}
+	addr = transport.Addr().String()
+	host, port, err := hostPort(addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	addr = host + ":" + port
 	transportFactory := thrift.NewTBufferedTransportFactory(8192)
 	protocolFactory := thrift.NewTBinaryProtocolFactoryDefault()
 	handler := &gateHandler{}
 	processor := service.NewGateProcessor(handler)
 	server := thrift.NewTSimpleServer4(processor, transport, transportFactory, protocolFactory)
-	err = server.Serve()
-	if err != nil {
-		log.Fatal(err)
-	}
+	go func() {
+		err = server.Serve()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+	return
 }

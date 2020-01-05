@@ -30,12 +30,11 @@ func NewThriftFactory(addr string) *ThriftFactory {
 }
 
 func (t *ThriftFactory) Open() (interface{}, error) {
-	var transport thrift.TTransport
-	transport, err := thrift.NewTSocket(t.addr)
+	sock, err := thrift.NewTSocket(t.addr)
 	if err != nil {
 		return nil, err
 	}
-	transport, err = t.transportFactory.GetTransport(transport)
+	transport, err := t.transportFactory.GetTransport(sock)
 	if err != nil {
 		return nil, err
 	}
