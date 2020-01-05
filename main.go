@@ -12,7 +12,7 @@ var addr = flag.String("addr", ":40001", "ws service address")
 
 func main() {
 	flag.Parse()
-	log.SetLevel(log.InfoLevel)
+	log.SetLevel(log.DebugLevel)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	shared.Registry.Start(map[string]string{
 		common.RpcGate: server.RpcServe(),

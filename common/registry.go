@@ -81,14 +81,14 @@ func (s *Registry) unregister() {
 }
 
 func (s *Registry) refresh() {
-	log.Debug("refresh")
+	log.Trace("refresh")
 	keys, err := s.client.Keys(Prefix + "*").Result()
 	if err != nil {
 		log.Error(err)
 		return
 	}
 	sort.Strings(keys) // DeepEqual needs
-	log.Debug(keys)
+	log.Trace(keys)
 	sm := make(ServiceMap)
 	for _, key := range keys {
 		name, address := unpack(key)
