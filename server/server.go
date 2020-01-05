@@ -33,8 +33,8 @@ type client struct {
 	id      string
 	conn    *websocket.Conn
 	writeC  chan interface{}
-	context map[string]string
 	stopped int32
+	context map[string]string
 }
 
 func newClient(id string, conn *websocket.Conn) *client {
@@ -82,6 +82,32 @@ func (c *client) Serve() {
 func (c *client) Stop() {
 	if atomic.CompareAndSwapInt32(&c.stopped, 0, 1) {
 		close(c.writeC)
+	}
+}
+
+func (c *client) SetContext(context map[string]string) {
+
+}
+
+func (c *client) UnsetContext(context []string) {
+
+}
+
+func (c *client) SendMessage(message interface{}) {
+	if atomic.LoadInt32(&c.stopped) == 1 {
+		return
+	}
+	defer func() {
+		if v := recover(); v != nil {
+			log.Warnf("panic %+v %+v", v, c.id) // race: channel closed
+			return
+		}
+	}()
+	select {
+	case c.writeC <- message:
+	default:
+		log.Errorf("channel full +%v", c.id)
+		c.Stop()
 	}
 }
 
