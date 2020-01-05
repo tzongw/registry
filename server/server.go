@@ -34,23 +34,26 @@ type client struct {
 	conn    *websocket.Conn
 	writeC  chan interface{}
 	stopped int32
-	context map[string]string
+	context atomic.Value
 }
 
+var emptyContext map[string]string
+
 func newClient(id string, conn *websocket.Conn) *client {
-	return &client{
-		id:      id,
-		conn:    conn,
-		writeC:  make(chan interface{}, writeChannelSize),
-		context: make(map[string]string),
+	c := &client{
+		id:     id,
+		conn:   conn,
+		writeC: make(chan interface{}, writeChannelSize),
 	}
+	c.context.Store(emptyContext)
+	return c
 }
 
 func (c *client) Serve() {
 	log.Debug("serve start ", c.id)
 	defer func() {
 		log.Debug("serve stop ", c.id)
-		shared.UserClient.Disconnect(shared.DefaultCtx, rpcAddr, c.id, c.context)
+		shared.UserClient.Disconnect(shared.DefaultCtx, rpcAddr, c.id, c.context.Load().(map[string]string))
 		c.Stop()
 	}()
 	go c.ping()
@@ -65,14 +68,14 @@ func (c *client) Serve() {
 		c.conn.SetReadDeadline(time.Now().Add(readWait))
 		mType, message, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Error(err)
+			log.Warn(err)
 			break
 		}
 		switch mType {
 		case websocket.BinaryMessage:
-			shared.UserClient.RecvBinary(shared.DefaultCtx, rpcAddr, c.id, c.context, message)
+			shared.UserClient.RecvBinary(shared.DefaultCtx, rpcAddr, c.id, c.context.Load().(map[string]string), message)
 		case websocket.TextMessage:
-			shared.UserClient.RecvText(shared.DefaultCtx, rpcAddr, c.id, c.context, string(message))
+			shared.UserClient.RecvText(shared.DefaultCtx, rpcAddr, c.id, c.context.Load().(map[string]string), string(message))
 		default:
 			log.Errorf("unknown message %+v, %+v", mType, message)
 		}
@@ -86,11 +89,16 @@ func (c *client) Stop() {
 }
 
 func (c *client) SetContext(context map[string]string) {
-
+	m := common.MergeMap(c.context.Load().(map[string]string), context)
+	c.context.Store(m)
 }
 
 func (c *client) UnsetContext(context []string) {
-
+	m := common.MergeMap(c.context.Load().(map[string]string), nil) // make a copy
+	for _, k := range context {
+		delete(m, k)
+	}
+	c.context.Store(m)
 }
 
 func (c *client) SendMessage(message interface{}) {
@@ -117,9 +125,9 @@ func (c *client) ping() {
 	for {
 		time.Sleep(common.PingInterval)
 		if atomic.LoadInt32(&c.stopped) == 1 {
-			break
+			return
 		}
-		shared.UserClient.Ping(shared.DefaultCtx, rpcAddr, c.id, c.context)
+		shared.UserClient.Ping(shared.DefaultCtx, rpcAddr, c.id, c.context.Load().(map[string]string))
 	}
 }
 
@@ -138,12 +146,13 @@ func (c *client) write() {
 			mType = websocket.BinaryMessage
 			message = t
 		default:
-			break
+			log.Errorf("unknown message %+v", m)
+			return
 		}
 		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 		if err := c.conn.WriteMessage(mType, message); err != nil {
 			log.Error(err)
-			break
+			return
 		}
 	}
 }

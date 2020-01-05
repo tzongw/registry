@@ -8,3 +8,14 @@ func FindIndex(limit int, predicate func(i int) bool) int {
 	}
 	return -1
 }
+
+func MergeMap(first map[string]string, second map[string]string) map[string]string {
+	m := make(map[string]string)
+	for k, v := range first {
+		m[k] = v
+	}
+	for k, v := range second {
+		m[k] = v
+	}
+	return m
+}
