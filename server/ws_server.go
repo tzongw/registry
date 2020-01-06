@@ -20,7 +20,10 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	connId := uuid.New().String()
 	client := newClient(connId, conn)
 	clients.Store(connId, client)
-	defer clients.Delete(connId)
+	defer func() {
+		clients.Delete(connId) // MUST before cleanGroup
+		cleanGroup(client)
+	}()
 	v := r.URL.Query()
 	params := make(map[string]string, len(v))
 	for k := range v {
