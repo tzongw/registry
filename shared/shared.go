@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	Registry   = common.NewRegistry(redis.NewClient(&redis.Options{}))
+	Registry                = common.NewRegistry(redis.NewClient(&redis.Options{}))
+	DefaultCtx              = context.Background()
 	UserClient service.User = service.NewUserClient(common.NewServiceClient(Registry, common.RpcUser, nil))
-	GateClient service.Gate  = service.NewGateClient(common.NewServiceClient(Registry, common.RpcGate, nil))
-	DefaultCtx = context.Background()
+	//GateClient              = service.NewGateClient(common.NewServiceClient(Registry, common.RpcGate, nil))
 )

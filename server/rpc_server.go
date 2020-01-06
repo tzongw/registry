@@ -17,7 +17,7 @@ type gateHandler struct {
 func (g *gateHandler) client(conn_id string) (*client, error) {
 	v, ok := clients.Load(conn_id)
 	if !ok {
-		log.Warnf("%+v not exist", conn_id)
+		log.Debugf("%+v not exist", conn_id)
 		return nil, ErrNotExist
 	}
 	return v.(*client), nil
