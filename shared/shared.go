@@ -3,8 +3,8 @@ package shared
 import (
 	"context"
 	"github.com/go-redis/redis"
-	"registry/common"
-	"registry/gen-go/service"
+	"github.com/tzongw/registry/common"
+	"github.com/tzongw/registry/gen-go/service"
 )
 
 var (

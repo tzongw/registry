@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/apache/thrift/lib/go/thrift"
 	log "github.com/sirupsen/logrus"
-	"registry/gen-go/service"
+	"github.com/tzongw/registry/gen-go/service"
 )
 
 var rpcAddr string

@@ -5,7 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"net/http"
-	"registry/shared"
+	"github.com/tzongw/registry/shared"
 )
 
 var upgrader = websocket.Upgrader{}

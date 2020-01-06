@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	log "github.com/sirupsen/logrus"
-	"registry/common"
-	"registry/server"
-	"registry/shared"
+	"github.com/tzongw/registry/common"
+	"github.com/tzongw/registry/server"
+	"github.com/tzongw/registry/shared"
 )
 
 var addr = flag.String("addr", ":40001", "ws service address")
