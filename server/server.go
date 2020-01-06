@@ -36,32 +36,28 @@ type client struct {
 	conn    *websocket.Conn
 	writeC  chan interface{}
 	stopped int32
-	m       sync.Mutex
-	context atomic.Value
+	ctxM    sync.Mutex
+	ctx     map[string]string
 	Groups  map[string]interface{} // protected by GLOBAL groupsMutex
 }
 
-var emptyContext map[string]string
-
 func newClient(id string, conn *websocket.Conn) *client {
-	c := &client{
+	return &client{
 		Id:     id,
 		conn:   conn,
 		writeC: make(chan interface{}, writeChannelSize),
 	}
-	c.context.Store(emptyContext)
-	return c
 }
 
 func (c *client) String() string {
-	return fmt.Sprintf("%s %+v", c.Id, c.context.Load())
+	return fmt.Sprintf("%s %+v", c.Id, c.Context())
 }
 
 func (c *client) Serve() {
 	log.Info("serve start ", c)
 	defer func() {
 		log.Info("serve stop ", c)
-		shared.UserClient.Disconnect(shared.DefaultCtx, rpcAddr, c.Id, c.context.Load().(map[string]string))
+		shared.UserClient.Disconnect(shared.DefaultCtx, rpcAddr, c.Id, c.Context())
 		c.Stop()
 	}()
 	go c.ping()
@@ -81,9 +77,9 @@ func (c *client) Serve() {
 		}
 		switch mType {
 		case websocket.BinaryMessage:
-			shared.UserClient.RecvBinary(shared.DefaultCtx, rpcAddr, c.Id, c.context.Load().(map[string]string), message)
+			shared.UserClient.RecvBinary(shared.DefaultCtx, rpcAddr, c.Id, c.Context(), message)
 		case websocket.TextMessage:
-			shared.UserClient.RecvText(shared.DefaultCtx, rpcAddr, c.Id, c.context.Load().(map[string]string), string(message))
+			shared.UserClient.RecvText(shared.DefaultCtx, rpcAddr, c.Id, c.Context(), string(message))
 		default:
 			log.Errorf("unknown message %+v, %+v", mType, message)
 		}
@@ -96,22 +92,27 @@ func (c *client) Stop() {
 	}
 }
 
+func (c *client) Context() map[string]string  {
+	c.ctxM.Lock()
+	c.ctxM.Unlock()
+	return c.ctx
+}
+
 func (c *client) SetContext(context map[string]string) {
-	c.m.Lock() // in case covered by another
-	c.m.Unlock()
-	m := common.MergeMap(c.context.Load().(map[string]string), context)
-	c.context.Store(m)
+	c.ctxM.Lock()
+	c.ctxM.Unlock()
+	c.ctx = common.MergeMap(c.ctx, context)
 	log.Info("set context ", c)
 }
 
 func (c *client) UnsetContext(context []string) {
-	c.m.Lock() // in case covered by another
-	c.m.Unlock()
-	m := common.MergeMap(c.context.Load().(map[string]string), nil) // make a copy
+	c.ctxM.Lock()
+	c.ctxM.Unlock()
+	m := common.MergeMap(c.ctx, nil) // make a copy, DONT modify c.ctx directly
 	for _, k := range context {
 		delete(m, k)
 	}
-	c.context.Store(m)
+	c.ctx = m
 }
 
 func (c *client) SendMessage(message interface{}) {
@@ -140,7 +141,7 @@ func (c *client) ping() {
 		if atomic.LoadInt32(&c.stopped) == 1 {
 			return
 		}
-		shared.UserClient.Ping(shared.DefaultCtx, rpcAddr, c.Id, c.context.Load().(map[string]string))
+		shared.UserClient.Ping(shared.DefaultCtx, rpcAddr, c.Id, c.Context())
 	}
 }
 

@@ -31,7 +31,7 @@ func DefaultOptions() *Options {
 type Pool struct {
 	factory Factory
 	opt     *Options
-	ch      chan interface{}
+	idleC   chan interface{}
 	size    int
 	closed  bool
 	m       sync.Mutex
@@ -44,7 +44,7 @@ func NewPool(factory Factory, opt *Options) *Pool {
 	return &Pool{
 		factory: factory,
 		opt:     opt,
-		ch:      make(chan interface{}, opt.PoolSize)}
+		idleC:   make(chan interface{}, opt.PoolSize)}
 }
 
 func (p *Pool) Close() {
@@ -53,7 +53,7 @@ func (p *Pool) Close() {
 	p.closed = true
 	for {
 		select {
-		case i := <-p.ch:
+		case i := <-p.idleC:
 			p.factory.Close(i)
 		default:
 			return
@@ -63,15 +63,15 @@ func (p *Pool) Close() {
 
 func (p *Pool) Get() (interface{}, error) {
 	p.m.Lock()
-	if len(p.ch) > 0 {
+	if len(p.idleC) > 0 {
 		defer p.m.Unlock()
-		return <-p.ch, nil
+		return <-p.idleC, nil
 	} else if p.size >= p.opt.PoolSize {
 		p.m.Unlock()
 		t := time.NewTimer(p.opt.PoolTimeout)
 		defer t.Stop()
 		select {
-		case i := <-p.ch:
+		case i := <-p.idleC:
 			return i, nil
 		case <-t.C:
 			log.Warnf("timeout %d", p.opt.PoolTimeout)
@@ -99,5 +99,5 @@ func (p *Pool) Put(i interface{}, err error) {
 		p.size -= 1
 		return
 	}
-	p.ch <- i
+	p.idleC <- i
 }
