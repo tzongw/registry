@@ -47,6 +47,7 @@ type client struct {
 	stopped int32
 	m       sync.Mutex
 	context atomic.Value
+	Groups  map[string]interface{} // protected by GLOBAL groupsMutex
 }
 
 var emptyContext map[string]string
@@ -56,6 +57,7 @@ func newClient(id string, conn *websocket.Conn) *client {
 		Id:     id,
 		conn:   conn,
 		writeC: make(chan interface{}, writeChannelSize),
+		Groups: make(map[string]interface{}),
 	}
 	c.context.Store(emptyContext)
 	return c
@@ -173,7 +175,12 @@ func (c *client) write() {
 	}
 }
 
-var groups sync.Map
+type groupInfo struct {
+	clients sync.Map // broadcast can iterate without lock
+	count   int
+}
+
+var groups = make(map[string]*groupInfo)
 var groupsMutex sync.Mutex
 
 var ErrNotInGroup = errors.New("not in group")
@@ -185,33 +192,50 @@ func joinGroup(connId, group string) error {
 	if err != nil {
 		return err
 	}
-	temp, _ := groups.LoadOrStore(group, &sync.Map{})
-	groupClients := temp.(*sync.Map)
-	groupClients.Store(c, nil)
+	c.Groups[group] = nil
+	g, ok := groups[group]
+	if !ok {
+		g = &groupInfo{}
+		groups[group] = g
+	}
+	g.clients.Store(c, nil)
+	g.count += 1
 	return nil
 }
 
 func leaveGroup(connId, group string) error {
+	groupsMutex.Lock()
+	defer groupsMutex.Unlock()
 	c, err := findClient(connId)
 	if err != nil {
 		return err
 	}
-	temp, ok := groups.Load(group)
+	delete(c.Groups, group)
+	return removeFromGroup(c, group)
+}
+
+// ONLY use by leaveGroup & cleanGroup
+func removeFromGroup(c *client, group string) error {
+	g, ok := groups[group]
 	if !ok {
 		return ErrNotInGroup
 	}
-	groupClients := temp.(*sync.Map)
-	groupClients.Delete(c)
+	g.clients.Delete(c)
+	g.count -= 1
+	if g.count == 0 {
+		delete(groups, group)
+	}
 	return nil
 }
 
 func broadcastMessage(group string, exclude []string, message interface{}) {
-	temp, ok := groups.Load(group)
+	groupsMutex.Lock()
+	g, ok := groups[group]
+	groupsMutex.Unlock()
 	if !ok {
 		return
 	}
-	groupClients := temp.(*sync.Map)
-	groupClients.Range(func(key, _ interface{}) bool {
+	g.clients.Range(func(key, _ interface{}) bool {
 		c := key.(*client)
 		index := common.FindIndex(len(exclude), func(i int) bool {
 			return c.Id == exclude[i]
@@ -224,4 +248,9 @@ func broadcastMessage(group string, exclude []string, message interface{}) {
 }
 
 func cleanGroup(c *client) {
+	groupsMutex.Lock()
+	defer groupsMutex.Unlock()
+	for group := range c.Groups {
+		removeFromGroup(c, group)
+	}
 }
