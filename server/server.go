@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
-	"github.com/micro/go-micro/util/addr"
 	log "github.com/sirupsen/logrus"
 	"net"
 	"registry/common"
@@ -18,7 +17,7 @@ func hostPort(hp string) (host, port string, err error) {
 	if host, port, err = net.SplitHostPort(hp); err != nil {
 		return
 	}
-	host, err = addr.Extract(host)
+	host, err = common.Extract(host)
 	return
 }
 
