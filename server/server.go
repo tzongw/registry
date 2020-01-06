@@ -57,7 +57,6 @@ func newClient(id string, conn *websocket.Conn) *client {
 		Id:     id,
 		conn:   conn,
 		writeC: make(chan interface{}, writeChannelSize),
-		Groups: make(map[string]interface{}),
 	}
 	c.context.Store(emptyContext)
 	return c
@@ -192,9 +191,13 @@ func joinGroup(connId, group string) error {
 	if err != nil {
 		return err
 	}
+	if c.Groups == nil {
+		c.Groups = make(map[string]interface{}, 1)
+	}
 	c.Groups[group] = nil
 	g, ok := groups[group]
 	if !ok {
+		log.Debug("create group ", group)
 		g = &groupInfo{}
 		groups[group] = g
 	}
@@ -224,6 +227,7 @@ func removeFromGroup(c *client, group string) error {
 	g.count -= 1
 	if g.count == 0 {
 		delete(groups, group)
+		log.Debug("delete group ", group)
 	}
 	return nil
 }
