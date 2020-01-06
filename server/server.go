@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/micro/go-micro/util/addr"
 	log "github.com/sirupsen/logrus"
@@ -62,10 +63,14 @@ func newClient(id string, conn *websocket.Conn) *client {
 	return c
 }
 
+func (c *client) String() string {
+	return fmt.Sprintf("%s %+v", c.Id, c.context.Load())
+}
+
 func (c *client) Serve() {
-	log.Debug("serve start ", c.Id)
+	log.Info("serve start ", c)
 	defer func() {
-		log.Debug("serve stop ", c.Id)
+		log.Info("serve stop ", c)
 		shared.UserClient.Disconnect(shared.DefaultCtx, rpcAddr, c.Id, c.context.Load().(map[string]string))
 		c.Stop()
 	}()
@@ -81,7 +86,7 @@ func (c *client) Serve() {
 		c.conn.SetReadDeadline(time.Now().Add(readWait))
 		mType, message, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Warn(err)
+			log.Info(err)
 			return
 		}
 		switch mType {
@@ -106,6 +111,7 @@ func (c *client) SetContext(context map[string]string) {
 	c.m.Unlock()
 	m := common.MergeMap(c.context.Load().(map[string]string), context)
 	c.context.Store(m)
+	log.Info("set context ", c)
 }
 
 func (c *client) UnsetContext(context []string) {
@@ -124,21 +130,21 @@ func (c *client) SendMessage(message interface{}) {
 	}
 	defer func() {
 		if v := recover(); v != nil {
-			log.Warnf("panic %+v %+v", v, c.Id) // race: channel closed
+			log.Warnf("panic %+v %s", v, c) // race: channel may closed
 			return
 		}
 	}()
 	select {
 	case c.writeC <- message:
 	default:
-		log.Errorf("channel full +%v", c.Id)
+		log.Error("channel full ", c)
 		c.Stop()
 	}
 }
 
 func (c *client) ping() {
-	log.Debug("ping start ", c.Id)
-	defer log.Debug("ping stop ", c.Id)
+	log.Debug("ping start ", c)
+	defer log.Debug("ping stop ", c)
 	for {
 		time.Sleep(common.PingInterval)
 		if atomic.LoadInt32(&c.stopped) == 1 {
@@ -149,8 +155,8 @@ func (c *client) ping() {
 }
 
 func (c *client) write() {
-	log.Debug("write start ", c.Id)
-	defer log.Debug("write stop ", c.Id)
+	log.Debug("write start ", c)
+	defer log.Debug("write stop ", c)
 	defer c.conn.Close()
 	for m := range c.writeC {
 		var mType int
@@ -163,7 +169,7 @@ func (c *client) write() {
 			mType = websocket.BinaryMessage
 			message = t
 		default:
-			log.Errorf("unknown message %+v", m)
+			log.Errorf("unknown message %+v %s", m, c)
 			return
 		}
 		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
