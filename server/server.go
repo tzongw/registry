@@ -5,21 +5,12 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
-	"net"
 	"github.com/tzongw/registry/common"
 	"github.com/tzongw/registry/shared"
 	"sync"
 	"sync/atomic"
 	"time"
 )
-
-func hostPort(hp string) (host, port string, err error) {
-	if host, port, err = net.SplitHostPort(hp); err != nil {
-		return
-	}
-	host, err = common.Extract(host)
-	return
-}
 
 const (
 	writeWait        = common.PingInterval
@@ -244,6 +235,7 @@ func broadcastMessage(group string, exclude []string, message interface{}) {
 	if !ok {
 		return
 	}
+	// this may take a while
 	g.clients.Range(func(key, _ interface{}) bool {
 		c := key.(*client)
 		index := common.FindIndex(len(exclude), func(i int) bool {

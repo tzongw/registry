@@ -1,5 +1,15 @@
 package common
 
+import "net"
+
+func HostPort(hp string) (host, port string, err error) {
+	if host, port, err = net.SplitHostPort(hp); err != nil {
+		return
+	}
+	host, err = Extract(host)
+	return
+}
+
 func FindIndex(limit int, predicate func(i int) bool) int {
 	for i := 0; i < limit; i++ {
 		if predicate(i) {

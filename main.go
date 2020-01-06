@@ -16,7 +16,7 @@ func main() {
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	shared.Registry.Start(map[string]string{
 		common.RpcGate: server.RpcServe(),
-		common.WsGate: server.WsServe(*addr),
+		common.WsGate:  server.WsServe(*addr),
 	})
 	select {}
 }

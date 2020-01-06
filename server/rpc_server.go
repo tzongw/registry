@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/apache/thrift/lib/go/thrift"
 	log "github.com/sirupsen/logrus"
+	"github.com/tzongw/registry/common"
 	"github.com/tzongw/registry/gen-go/service"
 )
 
@@ -65,12 +66,12 @@ func (g *gateHandler) LeaveGroup(ctx context.Context, connId string, group strin
 }
 
 func (g *gateHandler) BroadcastBinary(ctx context.Context, group string, exclude []string, message []byte) (err error) {
-	broadcastMessage(group, exclude, message)
+	go broadcastMessage(group, exclude, message)
 	return
 }
 
 func (g *gateHandler) BroadcastText(ctx context.Context, group string, exclude []string, message string) (err error) {
-	broadcastMessage(group, exclude, message)
+	go broadcastMessage(group, exclude, message)
 	return
 }
 
@@ -84,7 +85,7 @@ func RpcServe() (addr string) {
 		log.Fatal(err)
 	}
 	addr = transport.Addr().String()
-	host, port, err := hostPort(addr)
+	host, port, err := common.HostPort(addr)
 	if err != nil {
 		log.Fatal(err)
 	}

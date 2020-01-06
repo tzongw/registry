@@ -4,6 +4,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
+	"github.com/tzongw/registry/common"
 	"net/http"
 	"github.com/tzongw/registry/shared"
 )
@@ -46,7 +47,7 @@ func WsServe(addr string) string {
 			log.Fatal(err)
 		}
 	}()
-	host, port, err := hostPort(addr)
+	host, port, err := common.HostPort(addr)
 	if err != nil {
 		log.Fatal(err)
 	}
