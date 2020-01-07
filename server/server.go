@@ -222,7 +222,7 @@ func leaveGroup(connId, group string) error {
 	return nil
 }
 
-// ONLY use by leaveGroup & cleanGroup; c MUST in group
+// ONLY use by leaveGroup & cleanClient; c MUST in group
 func removeFromGroup(c *client, group string) {
 	g := groups[group]
 	g.clients.Delete(c)
@@ -253,9 +253,10 @@ func broadcastMessage(group string, exclude []string, message interface{}) {
 	})
 }
 
-func cleanGroup(c *client) {
+func cleanClient(c *client) {
 	groupsMutex.Lock()
 	defer groupsMutex.Unlock()
+	clients.Delete(c.Id) // join & leave no-op after this
 	for group := range c.Groups {
 		removeFromGroup(c, group)
 	}
