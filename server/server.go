@@ -38,7 +38,7 @@ type client struct {
 	stopped int32
 	ctxM    sync.Mutex
 	ctx     map[string]string
-	Groups  map[string]interface{} // protected by GLOBAL groupsMutex
+	Groups  map[string]struct{} // protected by GLOBAL groupsMutex
 }
 
 func newClient(id string, conn *websocket.Conn) *client {
@@ -189,9 +189,9 @@ func joinGroup(connId, group string) error {
 		return err
 	}
 	if c.Groups == nil {
-		c.Groups = make(map[string]interface{}, 1)
+		c.Groups = make(map[string]struct{}, 1)
 	}
-	c.Groups[group] = nil
+	c.Groups[group] = struct{}{}
 	g, ok := groups[group]
 	if !ok {
 		log.Debug("create group ", group)
