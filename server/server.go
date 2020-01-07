@@ -92,7 +92,7 @@ func (c *client) Stop() {
 	}
 }
 
-func (c *client) Context() map[string]string  {
+func (c *client) Context() map[string]string {
 	c.ctxM.Lock()
 	c.ctxM.Unlock()
 	return c.ctx
@@ -179,6 +179,7 @@ type groupInfo struct {
 var groups = make(map[string]*groupInfo)
 var groupsMutex sync.Mutex
 
+var ErrAlreadyInGroup = errors.New("already in group")
 var ErrNotInGroup = errors.New("not in group")
 
 func joinGroup(connId, group string) error {
@@ -187,6 +188,9 @@ func joinGroup(connId, group string) error {
 	c, err := findClient(connId)
 	if err != nil {
 		return err
+	}
+	if _, ok := c.Groups[group]; ok {
+		return ErrAlreadyInGroup // maybe join multi times
 	}
 	if c.Groups == nil {
 		c.Groups = make(map[string]struct{}, 1)
@@ -199,7 +203,7 @@ func joinGroup(connId, group string) error {
 		groups[group] = g
 	}
 	g.clients.Store(c, nil)
-	g.count += 1
+	g.count++
 	return nil
 }
 
@@ -210,23 +214,23 @@ func leaveGroup(connId, group string) error {
 	if err != nil {
 		return err
 	}
+	if _, ok := c.Groups[group]; !ok {
+		return ErrNotInGroup // maybe leave multi times
+	}
 	delete(c.Groups, group)
-	return removeFromGroup(c, group)
+	removeFromGroup(c, group)
+	return nil
 }
 
-// ONLY use by leaveGroup & cleanGroup
-func removeFromGroup(c *client, group string) error {
-	g, ok := groups[group]
-	if !ok {
-		return ErrNotInGroup
-	}
+// ONLY use by leaveGroup & cleanGroup; c MUST in group
+func removeFromGroup(c *client, group string) {
+	g := groups[group]
 	g.clients.Delete(c)
-	g.count -= 1
+	g.count--
 	if g.count == 0 {
 		delete(groups, group)
 		log.Debug("delete group ", group)
 	}
-	return nil
 }
 
 func broadcastMessage(group string, exclude []string, message interface{}) {
