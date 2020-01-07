@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var addr = flag.String("addr", ":40001", "ws service address")
+var addr = flag.String("addr", ":0", "ws service address")
 
 func main() {
 	flag.Parse()

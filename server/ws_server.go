@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/tzongw/registry/common"
+	"net"
 	"net/http"
 	"github.com/tzongw/registry/shared"
 )
@@ -42,14 +43,20 @@ func WsServe(addr string) string {
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(w, r)
 	})
-	go func() {
-		if err := http.ListenAndServe(addr, nil); err != nil {
-			log.Fatal(err)
-		}
-	}()
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	addr = ln.Addr().String()
 	host, port, err := common.HostPort(addr)
 	if err != nil {
 		log.Fatal(err)
 	}
+	server := &http.Server{Addr: addr, Handler: nil}
+	go func() {
+		if err := server.Serve(ln); err != nil {
+			log.Fatal(err)
+		}
+	}()
 	return host + ":" + port
 }

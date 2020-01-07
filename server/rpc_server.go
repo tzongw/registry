@@ -97,8 +97,7 @@ func RpcServe() (addr string) {
 	processor := service.NewGateProcessor(handler)
 	server := thrift.NewTSimpleServer4(processor, transport, transportFactory, protocolFactory)
 	go func() {
-		err = server.Serve()
-		if err != nil {
+		if err := server.Serve(); err != nil {
 			log.Fatal(err)
 		}
 	}()
