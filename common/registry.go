@@ -56,6 +56,7 @@ func (s *Registry) Start(services map[string]string) {
 }
 
 func (s *Registry) Stop() {
+	log.Info("stop")
 	s.unregister()
 }
 

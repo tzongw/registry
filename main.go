@@ -6,6 +6,10 @@ import (
 	"github.com/tzongw/registry/common"
 	"github.com/tzongw/registry/server"
 	"github.com/tzongw/registry/shared"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 var addr = flag.String("addr", ":40001", "ws service address")
@@ -18,5 +22,10 @@ func main() {
 		common.RpcGate: server.RpcServe(),
 		common.WsGate:  server.WsServe(*addr),
 	})
-	select {}
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+	<-ch
+	shared.Registry.Stop()
+	time.Sleep(3 * time.Second) // wait requests done
+	log.Info("exit")
 }
