@@ -20,6 +20,7 @@ const (
 )
 
 var clients sync.Map
+var clientCount int64
 
 var ErrNotExist = errors.New("not exist")
 
@@ -113,6 +114,7 @@ func (c *client) UnsetContext(context []string) {
 		delete(m, k)
 	}
 	c.ctx = m
+	log.Info("unset context ", c)
 }
 
 func (c *client) SendMessage(message interface{}) {
@@ -198,9 +200,9 @@ func joinGroup(connId, group string) error {
 	c.Groups[group] = struct{}{}
 	g, ok := groups[group]
 	if !ok {
-		log.Debug("create group ", group)
 		g = &groupInfo{}
 		groups[group] = g
+		log.Debugf("create group %+v, groups: %d", group, len(groups))
 	}
 	g.clients.Store(c, nil)
 	g.count++
@@ -229,7 +231,7 @@ func removeFromGroup(c *client, group string) {
 	g.count--
 	if g.count == 0 {
 		delete(groups, group)
-		log.Debug("delete group ", group)
+		log.Debugf("delete group %+v, groups: %d", group, len(groups))
 	}
 }
 

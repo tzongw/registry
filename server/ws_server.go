@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"github.com/tzongw/registry/shared"
+	"sync/atomic"
 )
 
 var upgrader = websocket.Upgrader{}
@@ -22,7 +23,13 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	connId := uuid.New().String()
 	client := newClient(connId, conn)
 	clients.Store(connId, client)
-	defer cleanClient(client)
+	count := atomic.AddInt64(&clientCount, 1)
+	log.Debug("++ client count ", count)
+	defer func() {
+		cleanClient(client)
+		count := atomic.AddInt64(&clientCount, -1)
+		log.Debug("-- client count ", count)
+	}()
 	v := r.URL.Query()
 	params := make(map[string]string, len(v))
 	for k := range v {
