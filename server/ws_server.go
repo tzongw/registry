@@ -24,11 +24,11 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	client := newClient(connId, conn)
 	clients.Store(connId, client)
 	count := atomic.AddInt64(&clientCount, 1)
-	log.Debug("++ client count ", count)
+	log.Info("++ client count ", count)
 	defer func() {
 		cleanClient(client)
 		count := atomic.AddInt64(&clientCount, -1)
-		log.Debug("-- client count ", count)
+		log.Info("-- client count ", count)
 	}()
 	v := r.URL.Query()
 	params := make(map[string]string, len(v))

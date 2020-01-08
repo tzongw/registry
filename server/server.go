@@ -51,7 +51,7 @@ func newClient(id string, conn *websocket.Conn) *client {
 }
 
 func (c *client) String() string {
-	return fmt.Sprintf("%s %+v", c.Id, c.Context())
+	return fmt.Sprintf("%+v %+v", c.Id, c.Context())
 }
 
 func (c *client) Serve() {
@@ -123,7 +123,7 @@ func (c *client) SendMessage(message interface{}) {
 	}
 	defer func() {
 		if v := recover(); v != nil {
-			log.Warnf("panic %+v %s", v, c) // race: channel may closed
+			log.Warnf("panic %+v %+v", v, c) // race: channel may closed
 			return
 		}
 	}()
@@ -162,12 +162,12 @@ func (c *client) write() {
 			mType = websocket.BinaryMessage
 			message = t
 		default:
-			log.Errorf("unknown message %+v %s", m, c)
+			log.Errorf("unknown message %+v %+v", m, c)
 			return
 		}
 		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 		if err := c.conn.WriteMessage(mType, message); err != nil {
-			log.Error(err)
+			log.Infof("write error %+v %+v", err, c)
 			return
 		}
 	}
@@ -202,7 +202,7 @@ func joinGroup(connId, group string) error {
 	if !ok {
 		g = &groupInfo{}
 		groups[group] = g
-		log.Debugf("create group %+v, groups: %d", group, len(groups))
+		log.Infof("create group %+v, groups: %d", group, len(groups))
 	}
 	g.clients.Store(c, nil)
 	g.count++
@@ -231,7 +231,7 @@ func removeFromGroup(c *client, group string) {
 	g.count--
 	if g.count == 0 {
 		delete(groups, group)
-		log.Debugf("delete group %+v, groups: %d", group, len(groups))
+		log.Infof("delete group %+v, groups: %d", group, len(groups))
 	}
 }
 

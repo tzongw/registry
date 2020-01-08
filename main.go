@@ -16,7 +16,8 @@ var addr = flag.String("addr", ":0", "ws service address")
 
 func main() {
 	flag.Parse()
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.InfoLevel)
+	log.SetReportCaller(true)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	shared.Registry.Start(map[string]string{
 		common.RpcGate: server.RpcServe(),
@@ -26,6 +27,6 @@ func main() {
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	<-ch
 	shared.Registry.Stop()
-	time.Sleep(3 * time.Second) // wait requests done
+	time.Sleep(time.Second) // wait requests done
 	log.Info("exit")
 }
