@@ -20,7 +20,7 @@ func FindIndex(limit int, predicate func(i int) bool) int {
 }
 
 func MergeMap(first map[string]string, second map[string]string) map[string]string {
-	m := make(map[string]string)
+	m := make(map[string]string, len(first)+len(second))
 	for k, v := range first {
 		m[k] = v
 	}

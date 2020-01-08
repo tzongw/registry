@@ -85,6 +85,7 @@ func RpcServe() (addr string) {
 		log.Fatal(err)
 	}
 	addr = transport.Addr().String()
+	log.Info("listen ", addr)
 	host, port, err := common.HostPort(addr)
 	if err != nil {
 		log.Fatal(err)

@@ -52,6 +52,7 @@ func WsServe(addr string) string {
 		log.Fatal(err)
 	}
 	addr = ln.Addr().String()
+	log.Info("listen ", addr)
 	host, port, err := common.HostPort(addr)
 	if err != nil {
 		log.Fatal(err)
