@@ -51,17 +51,17 @@ func (t *ThriftFactory) Close(conn interface{}) error {
 	return c.trans.Close()
 }
 
-type Client struct {
+type NodeClient struct {
 	p *Pool
 }
 
-func NewClient(addr string, opt *Options) *Client {
-	return &Client{
+func NewNodeClient(addr string, opt *Options) *NodeClient {
+	return &NodeClient{
 		p: NewPool(NewThriftFactory(addr), opt),
 	}
 }
 
-func (c *Client) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
+func (c *NodeClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
 	cc, err := c.p.Get()
 	if err != nil {
 		return err
@@ -71,11 +71,11 @@ func (c *Client) Call(ctx context.Context, method string, args, result thrift.TS
 	return err
 }
 
-func (c *Client) Close() {
+func (c *NodeClient) Close() {
 	c.p.Close()
 }
 
-var ErrNoneAvailable = errors.New("none available")
+var ErrUnavailable = errors.New("unavailable")
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -86,7 +86,7 @@ type ServiceClient struct {
 	registry *Registry
 	opt      *Options
 	m        sync.Mutex
-	clients  map[string]*Client
+	clients  map[string]*NodeClient
 }
 
 func NewServiceClient(registry *Registry, service string, opt *Options) *ServiceClient {
@@ -94,7 +94,7 @@ func NewServiceClient(registry *Registry, service string, opt *Options) *Service
 		registry: registry,
 		service:  service,
 		opt:      opt,
-		clients:  make(map[string]*Client),
+		clients:  make(map[string]*NodeClient),
 	}
 	registry.AddCallback(c.clean)
 	return c
@@ -120,16 +120,21 @@ func (c *ServiceClient) clean() {
 func (c *ServiceClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
 	addresses := c.registry.Addresses(c.service)
 	if len(addresses) == 0 {
-		return ErrNoneAvailable
+		return ErrUnavailable
 	}
 	i := rand.Intn(len(addresses))
 	addr := addresses[i]
+	client := c.client(addr)
+	return client.Call(ctx, method, args, result)
+}
+
+func (c *ServiceClient) client(addr string) *NodeClient {
 	c.m.Lock()
+	defer c.m.Unlock()
 	client, ok := c.clients[addr]
 	if !ok {
-		client = NewClient(addr, c.opt)
+		client = NewNodeClient(addr, c.opt)
 		c.clients[addr] = client
 	}
-	c.m.Unlock()
-	return client.Call(ctx, method, args, result)
+	return client
 }
