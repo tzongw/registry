@@ -104,6 +104,7 @@ func (c *ServiceClient) clean() {
 	log.Infof("watch %+v", c.service)
 	addresses := c.registry.Addresses(c.service)
 	c.m.Lock()
+	defer c.m.Unlock()
 	for addr, client := range c.clients {
 		index := FindIndex(len(addresses), func(i int) bool {
 			return addresses[i] == addr
@@ -114,7 +115,6 @@ func (c *ServiceClient) clean() {
 			delete(c.clients, addr)
 		}
 	}
-	c.m.Unlock()
 }
 
 func (c *ServiceClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {

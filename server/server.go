@@ -95,25 +95,25 @@ func (c *client) Stop() {
 
 func (c *client) Context() map[string]string {
 	c.ctxM.Lock()
-	c.ctxM.Unlock()
+	defer c.ctxM.Unlock()
 	return c.ctx
 }
 
 func (c *client) SetContext(context map[string]string) {
 	c.ctxM.Lock()
-	c.ctxM.Unlock()
 	c.ctx = common.MergeMap(c.ctx, context)
+	c.ctxM.Unlock()  // !! log -> client.String -> Context -> Lock
 	log.Info("set context ", c)
 }
 
 func (c *client) UnsetContext(context []string) {
 	c.ctxM.Lock()
-	c.ctxM.Unlock()
-	m := common.MergeMap(c.ctx, nil) // make a copy, DONT modify c.ctx directly
+	m := common.MergeMap(c.ctx, nil) // make a copy, DONT modify c.ctx content
 	for _, k := range context {
 		delete(m, k)
 	}
 	c.ctx = m
+	c.ctxM.Unlock()
 	log.Info("unset context ", c)
 }
 
