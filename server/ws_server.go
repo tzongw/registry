@@ -13,7 +13,7 @@ import (
 
 var upgrader = websocket.Upgrader{}
 
-func serveWs(w http.ResponseWriter, r *http.Request) {
+func wsHandle(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Error(err)
@@ -45,7 +45,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 
 func WsServe(addr string) string {
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		serveWs(w, r)
+		wsHandle(w, r)
 	})
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
