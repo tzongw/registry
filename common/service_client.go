@@ -117,15 +117,51 @@ func (c *ServiceClient) clean() {
 	}
 }
 
+type tNodeSelector int
+
+var selector = tNodeSelector(0)
+var broadcast = 0
+var BroadcastCtx = context.WithValue(context.Background(), selector, broadcast)
+
+func WithNode(addr string) context.Context {
+	return context.WithValue(context.Background(), selector, addr)
+}
+
 func (c *ServiceClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
 	addresses := c.registry.Addresses(c.service)
 	if len(addresses) == 0 {
 		return ErrUnavailable
 	}
-	i := rand.Intn(len(addresses))
-	addr := addresses[i]
-	client := c.client(addr)
-	return client.Call(ctx, method, args, result)
+	if v := ctx.Value(selector); v != nil {
+		if addr, ok := v.(string); ok {
+			index := FindIndex(len(addresses), func(i int) bool {
+				return addresses[i] == addr
+			})
+			if index < 0 {
+				return ErrUnavailable
+			}
+			client := c.client(addr)
+			return client.Call(ctx, method, args, result)
+		} else {
+			if result != nil {
+				panic("broadcast MUST be oneway")
+			}
+			var err error
+			for _, addr := range addresses {
+				client := c.client(addr)
+				e := client.Call(ctx, method, args, result)
+				if err == nil { // first error
+					err = e
+				}
+			}
+			return err
+		}
+	} else {
+		i := rand.Intn(len(addresses))
+		addr := addresses[i]
+		client := c.client(addr)
+		return client.Call(ctx, method, args, result)
+	}
 }
 
 func (c *ServiceClient) client(addr string) *NodeClient {
