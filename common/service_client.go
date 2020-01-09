@@ -117,6 +117,8 @@ func (c *ServiceClient) clean() {
 	}
 }
 
+var RandomCtx = context.Background()
+
 type tNodeSelector int
 
 var selector = tNodeSelector(0)

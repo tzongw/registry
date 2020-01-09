@@ -58,7 +58,7 @@ func (c *client) Serve() {
 	log.Info("serve start ", c)
 	defer func() {
 		log.Info("serve stop ", c)
-		shared.UserClient.Disconnect(shared.DefaultCtx, rpcAddr, c.Id, c.Context())
+		shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.Id, c.Context())
 		c.Stop()
 	}()
 	go c.ping()
@@ -78,9 +78,9 @@ func (c *client) Serve() {
 		}
 		switch mType {
 		case websocket.BinaryMessage:
-			shared.UserClient.RecvBinary(shared.DefaultCtx, rpcAddr, c.Id, c.Context(), message)
+			shared.UserClient.RecvBinary(common.RandomCtx, rpcAddr, c.Id, c.Context(), message)
 		case websocket.TextMessage:
-			shared.UserClient.RecvText(shared.DefaultCtx, rpcAddr, c.Id, c.Context(), string(message))
+			shared.UserClient.RecvText(common.RandomCtx, rpcAddr, c.Id, c.Context(), string(message))
 		default:
 			log.Errorf("unknown message %+v, %+v", mType, message)
 		}
@@ -143,7 +143,7 @@ func (c *client) ping() {
 		if atomic.LoadInt32(&c.stopped) == 1 {
 			return
 		}
-		shared.UserClient.Ping(shared.DefaultCtx, rpcAddr, c.Id, c.Context())
+		shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.Id, c.Context())
 	}
 }
 

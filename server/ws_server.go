@@ -35,7 +35,7 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	for k := range v {
 		params[k] = v.Get(k)
 	}
-	err = shared.UserClient.Login(shared.DefaultCtx, rpcAddr, connId, params)
+	err = shared.UserClient.Login(common.RandomCtx, rpcAddr, connId, params)
 	if err != nil {
 		log.Error(err)
 		return
