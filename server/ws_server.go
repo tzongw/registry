@@ -5,10 +5,12 @@ import (
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/tzongw/registry/common"
+	"github.com/tzongw/registry/shared"
+	"math/rand"
 	"net"
 	"net/http"
-	"github.com/tzongw/registry/shared"
 	"sync/atomic"
+	"time"
 )
 
 var upgrader = websocket.Upgrader{}
@@ -63,5 +65,26 @@ func WsServe(addr string) string {
 			log.Fatal(err)
 		}
 	}()
+	//go testGateService()
 	return host + ":" + port
+}
+
+func testGateService() {
+	for {
+		time.Sleep(3 * time.Second)
+		count := int(atomic.LoadInt64(&clientCount))
+		if count > 0 {
+			selected := rand.Intn(count)
+			i := 0
+			clients.Range(func(connId, _ interface{}) bool {
+				if selected == i {
+					shared.GateClient.SendText(common.WithNode(rpcAddr), connId.(string), "unicast message")
+					return false
+				}
+				i++
+				return true
+			})
+		}
+		shared.GateClient.BroadcastText(common.BroadcastCtx, "chat_room", nil, "broadcast message")
+	}
 }
