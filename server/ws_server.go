@@ -66,7 +66,7 @@ func WsServe(addr string) string {
 		}
 	}()
 	//go testGateService()
-	return host + ":" + port
+	return net.JoinHostPort(host, port)
 }
 
 func testGateService() {
