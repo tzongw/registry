@@ -1,10 +1,13 @@
 package server
 
 import (
+	"context"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/tzongw/registry/common"
+	"github.com/tzongw/registry/gen-go/service"
 	"github.com/tzongw/registry/shared"
 	"math/rand"
 	"net"
@@ -78,13 +81,19 @@ func testGateService() {
 			i := 0
 			clients.Range(func(connId, _ interface{}) bool {
 				if selected == i {
-					shared.GateClient.SendText(common.WithNode(rpcAddr), connId.(string), "unicast message")
+					shared.GateClient.ConnClient(rpcAddr, func(gate service.Gate) error {
+						for i := 0; i < 3; i++ {
+							if err := gate.SendText(context.Background(), connId.(string), fmt.Sprintf("unicast message %d", i)); err != nil {
+								return err
+							}
+						}
+						return nil
+					})
 					return false
 				}
 				i++
 				return true
 			})
 		}
-		shared.GateClient.BroadcastText(common.BroadcastCtx, "chat_room", nil, "broadcast message")
 	}
 }
