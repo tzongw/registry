@@ -176,3 +176,14 @@ func (c *ServiceClient) client(addr string) *NodeClient {
 	}
 	return client
 }
+
+func (c *ServiceClient) ConnClient(addr string, f func(conn thrift.TClient) error) error {
+	nodeClient := c.client(addr)
+	conn, err := nodeClient.p.Get()
+	if err != nil {
+		return err
+	}
+	err = f(conn.(*client))
+	nodeClient.p.Put(conn, err)
+	return err
+}
