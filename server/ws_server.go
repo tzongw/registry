@@ -83,17 +83,20 @@ func testGateService() {
 				if selected == i {
 					shared.GateClient.ConnClient(rpcAddr, func(gate service.Gate) error {
 						for i := 0; i < 3; i++ {
-							if err := gate.SendText(context.Background(), connId.(string), fmt.Sprintf("unicast message %d", i)); err != nil {
+							if err := gate.SendText(context.Background(), connId.(string), fmt.Sprintf("sequence message %d", i)); err != nil {
 								return err
 							}
 						}
 						return nil
 					})
+					shared.GateClient.SendText(common.WithNode(rpcAddr), connId.(string), "unicast message")
 					return false
+				} else {
+					i++
+					return true
 				}
-				i++
-				return true
 			})
 		}
+		shared.GateClient.BroadcastText(common.BroadcastCtx, "chat_room", nil, "broadcast message")
 	}
 }
