@@ -37,8 +37,7 @@ type client struct {
 	conn    *websocket.Conn
 	writeC  chan interface{}
 	stopped int32
-	ctxM    sync.Mutex
-	ctx     map[string]string
+	ctx     atomic.Value
 	Groups  map[string]struct{} // protected by GLOBAL groupsMutex
 }
 
@@ -94,26 +93,24 @@ func (c *client) Stop() {
 }
 
 func (c *client) Context() map[string]string {
-	c.ctxM.Lock()
-	defer c.ctxM.Unlock()
-	return c.ctx
+	if v := c.ctx.Load(); v != nil {
+		return v.(map[string]string)
+	}
+	return nil
 }
 
 func (c *client) SetContext(context map[string]string) {
-	c.ctxM.Lock()
-	c.ctx = common.MergeMap(c.ctx, context)
-	c.ctxM.Unlock()  // !! log -> client.String -> Context -> Lock
+	m := common.MergeMap(c.Context(), context)
+	c.ctx.Store(m)
 	log.Info("set context ", c)
 }
 
 func (c *client) UnsetContext(context []string) {
-	c.ctxM.Lock()
-	m := common.MergeMap(c.ctx, nil) // make a copy, DONT modify c.ctx content
+	m := common.MergeMap(c.Context(), nil) // make a copy, DONT modify content
 	for _, k := range context {
 		delete(m, k)
 	}
-	c.ctx = m
-	c.ctxM.Unlock()
+	c.ctx.Store(m)
 	log.Info("unset context ", c)
 }
 
