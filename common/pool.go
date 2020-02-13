@@ -80,7 +80,7 @@ func (p *Pool) nextCheck() bool {
 	if p.closed {
 		return false
 	}
-	var elems []Elem
+	elems := make([]Elem, 0, len(p.idleC))
 	now := time.Now()
 loop:
 	for {
