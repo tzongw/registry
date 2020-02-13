@@ -31,7 +31,7 @@ func DefaultOptions() *Options {
 type Pool struct {
 	factory Factory
 	opt     *Options
-	idleC   chan Elem
+	idleC   chan *Elem
 	size    int
 	queue   int
 	closed  bool
@@ -50,7 +50,7 @@ func NewPool(factory Factory, opt *Options) *Pool {
 	p := &Pool{
 		factory: factory,
 		opt:     opt,
-		idleC:   make(chan Elem, opt.PoolSize)}
+		idleC:   make(chan *Elem, opt.PoolSize)}
 	if opt.IdleTimeout > 0 {
 		go p.idleCheck()
 	}
@@ -80,7 +80,7 @@ func (p *Pool) nextCheck() bool {
 	if p.closed {
 		return false
 	}
-	elems := make([]Elem, 0, len(p.idleC))
+	elems := make([]*Elem, 0, len(p.idleC))
 	now := time.Now()
 loop:
 	for {
@@ -171,5 +171,5 @@ func (p *Pool) Put(i interface{}, err error) {
 		p.size -= 1
 		return
 	}
-	p.idleC <- Elem{i: i, used: time.Now()}
+	p.idleC <- &Elem{i: i, used: time.Now()}
 }
