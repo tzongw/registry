@@ -63,8 +63,8 @@ func (p *Pool) Close() {
 	p.closed = true
 	for {
 		select {
-		case i := <-p.idleC:
-			p.factory.Close(i)
+		case elem := <-p.idleC:
+			p.factory.Close(elem.i)
 		default:
 			return
 		}
