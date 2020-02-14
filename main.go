@@ -6,6 +6,8 @@ import (
 	"github.com/tzongw/registry/common"
 	"github.com/tzongw/registry/server"
 	"github.com/tzongw/registry/shared"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,6 +17,9 @@ import (
 var addr = flag.String("addr", ":0", "ws service address")
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	flag.Parse()
 	log.SetLevel(log.InfoLevel)
 	log.SetReportCaller(true)
