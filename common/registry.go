@@ -24,6 +24,7 @@ type Registry struct {
 	services     map[string]string
 	serviceMap   atomic.Value
 	client       *redis.Client
+	stopped      int32
 	m            sync.Mutex
 	afterRefresh []func()
 }
@@ -57,6 +58,7 @@ func (s *Registry) Start(services map[string]string) {
 
 func (s *Registry) Stop() {
 	log.Info("stop")
+	atomic.StoreInt32(&s.stopped, 1)
 	s.unregister()
 }
 
@@ -84,7 +86,7 @@ func (s *Registry) unregister() {
 func (s *Registry) refresh() {
 	log.Trace("refresh")
 	var keys []string
-	for i := s.client.Scan(0, Prefix + "*", 100).Iterator(); i.Next(); {
+	for i := s.client.Scan(0, Prefix+"*", 100).Iterator(); i.Next(); {
 		keys = append(keys, i.Val())
 	}
 	sort.Strings(keys) // DeepEqual needs
@@ -120,7 +122,7 @@ func (s *Registry) run() {
 	log.Debug("run")
 	published := false
 	sub := s.client.Subscribe(Prefix)
-	for {
+	for atomic.LoadInt32(&s.stopped) == 0 {
 		if len(s.services) > 0 {
 			s.client.Pipelined(func(p redis.Pipeliner) error {
 				for name, addr := range s.services {
@@ -129,9 +131,14 @@ func (s *Registry) run() {
 				}
 				return nil
 			})
+			if atomic.LoadInt32(&s.stopped) == 1 { // race
+				s.unregister()
+				return
+			}
 			if !published {
 				published = true
 				log.Info("publish ", s.services)
+				s.client.Publish(Prefix, "register")
 			}
 		}
 		s.refresh()
