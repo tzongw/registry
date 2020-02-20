@@ -63,8 +63,8 @@ func (c *client) Serve() {
 	go c.ping()
 	go c.write()
 	c.conn.SetReadLimit(maxMessageSize)
-	h := c.conn.PingHandler()
-	c.conn.SetPingHandler(func(appData string) error {
+	h := c.conn.PongHandler()
+	c.conn.SetPongHandler(func(appData string) error {
 		c.conn.SetReadDeadline(time.Now().Add(readWait))
 		return h(appData)
 	})
@@ -140,6 +140,7 @@ func (c *client) ping() {
 		if atomic.LoadInt32(&c.stopped) == 1 {
 			return
 		}
+		c.SendMessage(nil) // ping
 		shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.Id, c.Context())
 	}
 }
@@ -149,7 +150,7 @@ func (c *client) write() {
 	defer log.Debug("write stop ", c)
 	defer c.conn.Close()
 	for m := range c.writeC {
-		var mType int
+		mType := websocket.PingMessage
 		var message []byte
 		switch t := m.(type) {
 		case string:
@@ -158,9 +159,6 @@ func (c *client) write() {
 		case []byte:
 			mType = websocket.BinaryMessage
 			message = t
-		default:
-			log.Errorf("unknown message %+v %+v", m, c)
-			return
 		}
 		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 		if err := c.conn.WriteMessage(mType, message); err != nil {
