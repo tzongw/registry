@@ -3,6 +3,7 @@ package common
 import (
 	"github.com/go-redis/redis"
 	log "github.com/sirupsen/logrus"
+	"net"
 	"reflect"
 	"sort"
 	"strings"
@@ -86,8 +87,13 @@ func (s *Registry) unregister() {
 func (s *Registry) refresh() {
 	log.Trace("refresh")
 	var keys []string
-	for i := s.client.Scan(0, Prefix+"*", 100).Iterator(); i.Next(); {
+	scan := s.client.Scan(0, Prefix+"*", 100)
+	for i := scan.Iterator(); i.Next(); {
 		keys = append(keys, i.Val())
+	}
+	if err := scan.Err(); err != nil {
+		log.Error(err)
+		return
 	}
 	sort.Strings(keys) // DeepEqual needs
 	log.Trace(keys)
@@ -142,7 +148,14 @@ func (s *Registry) run() {
 			}
 		}
 		s.refresh()
-		if m, _ := sub.ReceiveTimeout(RefreshInterval); m != nil {
+		if m, err := sub.ReceiveTimeout(RefreshInterval); err != nil {
+			if err, ok := err.(net.Error); ok && err.Timeout() {
+				log.Trace(err)
+			} else {
+				log.Error(err)
+				time.Sleep(RefreshInterval)
+			}
+		} else {
 			log.Info(m)
 		}
 	}
