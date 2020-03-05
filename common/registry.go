@@ -1,6 +1,7 @@
 package common
 
 import (
+	"errors"
 	"github.com/go-redis/redis"
 	log "github.com/sirupsen/logrus"
 	"net"
@@ -38,9 +39,12 @@ func fullKey(name, address string) string {
 	return keyPrefix(name) + ":" + address
 }
 
-func unpack(key string) (string, string) {
+func unpack(key string) (string, string, error) {
 	ss := strings.SplitN(key, ":", 3)
-	return ss[1], ss[2]
+	if len(ss) != 3 {
+		return "", "", errors.New("key not valid")
+	}
+	return ss[1], ss[2], nil
 }
 
 func NewRegistry(client *redis.Client) *Registry {
@@ -104,8 +108,11 @@ func (s *Registry) refresh() {
 			continue
 		}
 		lastKey = key
-		name, address := unpack(key)
-		sm[name] = append(sm[name], address)
+		if name, address, err := unpack(key); err != nil {
+			log.Error(err)
+		} else {
+			sm[name] = append(sm[name], address)
+		}
 	}
 	if m := s.serviceMap.Load(); !reflect.DeepEqual(m, sm) {
 		log.Infof("update %+v -> %+v", m, sm)
