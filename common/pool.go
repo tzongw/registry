@@ -23,7 +23,7 @@ type Options struct {
 func DefaultOptions() *Options {
 	return &Options{
 		PoolSize:    128,
-		PoolTimeout: 3 * time.Second,
+		PoolTimeout: time.Second,
 		IdleTimeout: time.Hour,
 	}
 }

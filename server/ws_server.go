@@ -1,19 +1,14 @@
 package server
 
 import (
-	"context"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/tzongw/registry/common"
-	"github.com/tzongw/registry/gen-go/service"
 	"github.com/tzongw/registry/shared"
-	"math/rand"
 	"net"
 	"net/http"
 	"sync/atomic"
-	"time"
 )
 
 var upgrader = websocket.Upgrader{}
@@ -68,35 +63,5 @@ func WsServe(addr string) string {
 			log.Fatal(err)
 		}
 	}()
-	//go testGateService()
 	return net.JoinHostPort(host, port)
-}
-
-func testGateService() {
-	for {
-		time.Sleep(3 * time.Second)
-		count := int(atomic.LoadInt64(&clientCount))
-		if count > 0 {
-			selected := rand.Intn(count)
-			i := 0
-			clients.Range(func(connId, _ interface{}) bool {
-				if selected == i {
-					shared.GateClient.ConnClient(rpcAddr, func(gate service.Gate) error {
-						for i := 0; i < 3; i++ {
-							if err := gate.SendText(context.Background(), connId.(string), fmt.Sprintf("sequence message %d", i)); err != nil {
-								return err
-							}
-						}
-						return nil
-					})
-					shared.GateClient.SendText(common.WithNode(rpcAddr), connId.(string), "unicast message")
-					return false
-				} else {
-					i++
-					return true
-				}
-			})
-		}
-		shared.GateClient.BroadcastText(common.BroadcastCtx, "chat_room", nil, "broadcast message")
-	}
 }

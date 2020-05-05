@@ -30,6 +30,7 @@ func (g *gateHandler) UnsetContext(ctx context.Context, connId string, context [
 	c.UnsetContext(context)
 	return
 }
+
 func (g *gateHandler) RemoveConn(ctx context.Context, connId string) (err error) {
 	c, err := findClient(connId)
 	if err != nil {
@@ -38,6 +39,7 @@ func (g *gateHandler) RemoveConn(ctx context.Context, connId string) (err error)
 	c.Stop()
 	return
 }
+
 func (g *gateHandler) SendText(ctx context.Context, connId string, message string) (err error) {
 	c, err := findClient(connId)
 	if err != nil {
@@ -46,6 +48,7 @@ func (g *gateHandler) SendText(ctx context.Context, connId string, message strin
 	c.SendMessage(message)
 	return
 }
+
 func (g *gateHandler) SendBinary(ctx context.Context, connId string, message []byte) (err error) {
 	c, err := findClient(connId)
 	if err != nil {
