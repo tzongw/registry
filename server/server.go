@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	writeWait        = common.PingInterval
 	readWait         = common.MissTimes * common.PingInterval
+	writeWait        = 3 * time.Second
 	maxMessageSize   = 100 * 1024
-	writeChannelSize = 256
+	writeChannelSize = 128
 )
 
 var clients sync.Map
@@ -32,10 +32,15 @@ func findClient(connId string) (*client, error) {
 	return v.(*client), nil
 }
 
+type message struct {
+	Type    int
+	Content []byte
+}
+
 type client struct {
 	Id      string
 	conn    *websocket.Conn
-	writeC  chan interface{}
+	writeC  chan *message
 	stopped int32
 	ctx     atomic.Value
 	Groups  map[string]struct{} // protected by GLOBAL groupsMutex
@@ -45,7 +50,7 @@ func newClient(id string, conn *websocket.Conn) *client {
 	return &client{
 		Id:     id,
 		conn:   conn,
-		writeC: make(chan interface{}, writeChannelSize),
+		writeC: make(chan *message, writeChannelSize),
 	}
 }
 
@@ -114,7 +119,15 @@ func (c *client) UnsetContext(context []string) {
 	log.Info("unset context ", c)
 }
 
-func (c *client) SendMessage(message interface{}) {
+func (c *client) SendText(content string) {
+	c.sendMessage(&message{Type: websocket.TextMessage, Content: []byte(content)})
+}
+
+func (c *client) SendBinary(content []byte) {
+	c.sendMessage(&message{Type: websocket.BinaryMessage, Content: content})
+}
+
+func (c *client) sendMessage(msg *message) {
 	if atomic.LoadInt32(&c.stopped) == 1 {
 		return
 	}
@@ -125,7 +138,7 @@ func (c *client) SendMessage(message interface{}) {
 		}
 	}()
 	select {
-	case c.writeC <- message:
+	case c.writeC <- msg:
 	default:
 		log.Error("channel full ", c)
 		c.Stop()
@@ -140,7 +153,7 @@ func (c *client) ping() {
 		if atomic.LoadInt32(&c.stopped) == 1 {
 			return
 		}
-		c.SendMessage(nil) // ping
+		c.sendMessage(&message{Type: websocket.PingMessage}) // ping
 		shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.Id, c.Context())
 	}
 }
@@ -150,18 +163,8 @@ func (c *client) write() {
 	defer log.Debug("write stop ", c)
 	defer c.conn.Close()
 	for m := range c.writeC {
-		mType := websocket.PingMessage
-		var message []byte
-		switch t := m.(type) {
-		case string:
-			mType = websocket.TextMessage
-			message = []byte(t)
-		case []byte:
-			mType = websocket.BinaryMessage
-			message = t
-		}
 		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-		if err := c.conn.WriteMessage(mType, message); err != nil {
+		if err := c.conn.WriteMessage(m.Type, m.Content); err != nil {
 			log.Infof("write error %+v %+v", err, c)
 			return
 		}
@@ -230,7 +233,15 @@ func removeFromGroup(c *client, group string) {
 	}
 }
 
-func broadcastMessage(group string, exclude []string, message interface{}) {
+func broadcastText(group string, exclude []string, content string) {
+	broadcastMessage(group, exclude, &message{Type: websocket.TextMessage, Content: []byte(content)})
+}
+
+func broadcastBinary(group string, exclude []string, content []byte) {
+	broadcastMessage(group, exclude, &message{Type: websocket.BinaryMessage, Content: content})
+}
+
+func broadcastMessage(group string, exclude []string, msg *message) {
 	groupsMutex.Lock()
 	g, ok := groups[group]
 	groupsMutex.Unlock()
@@ -238,13 +249,13 @@ func broadcastMessage(group string, exclude []string, message interface{}) {
 		return
 	}
 	// this may take a while
-	g.clients.Range(func(key, _ interface{}) bool {
+	go g.clients.Range(func(key, _ interface{}) bool {
 		c := key.(*client)
 		index := common.FindIndex(len(exclude), func(i int) bool {
 			return c.Id == exclude[i]
 		})
 		if index < 0 {
-			c.SendMessage(message)
+			c.sendMessage(msg)
 		}
 		return true
 	})

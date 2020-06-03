@@ -45,7 +45,7 @@ func (g *gateHandler) SendText(ctx context.Context, connId string, message strin
 	if err != nil {
 		return
 	}
-	c.SendMessage(message)
+	c.SendText(message)
 	return
 }
 
@@ -54,7 +54,7 @@ func (g *gateHandler) SendBinary(ctx context.Context, connId string, message []b
 	if err != nil {
 		return
 	}
-	c.SendMessage(message)
+	c.SendBinary(message)
 	return
 }
 
@@ -69,12 +69,12 @@ func (g *gateHandler) LeaveGroup(ctx context.Context, connId string, group strin
 }
 
 func (g *gateHandler) BroadcastBinary(ctx context.Context, group string, exclude []string, message []byte) (err error) {
-	go broadcastMessage(group, exclude, message)
+	broadcastBinary(group, exclude, message)
 	return
 }
 
 func (g *gateHandler) BroadcastText(ctx context.Context, group string, exclude []string, message string) (err error) {
-	go broadcastMessage(group, exclude, message)
+	broadcastText(group, exclude, message)
 	return
 }
 
