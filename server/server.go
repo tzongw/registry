@@ -37,6 +37,8 @@ type message struct {
 	Content []byte
 }
 
+var pingMessage = &message{Type: websocket.PingMessage}
+
 type client struct {
 	Id      string
 	conn    *websocket.Conn
@@ -153,7 +155,7 @@ func (c *client) ping() {
 		if atomic.LoadInt32(&c.stopped) == 1 {
 			return
 		}
-		c.sendMessage(&message{Type: websocket.PingMessage}) // ping
+		c.sendMessage(pingMessage)
 		shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.Id, c.Context())
 	}
 }
