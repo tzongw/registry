@@ -14,14 +14,17 @@ import (
 	"time"
 )
 
+var debug = flag.Bool("debug", false, "debug state")
 var addr = flag.String("addr", ":0", "ws service address")
 
 func main() {
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
 	flag.Parse()
-	log.SetLevel(log.InfoLevel)
+	if *debug {
+		log.SetLevel(log.DebugLevel)
+		go http.ListenAndServe("localhost:6060", nil)
+	} else {
+		log.SetLevel(log.InfoLevel)
+	}
 	log.SetReportCaller(true)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	shared.Registry.Start(map[string]string{

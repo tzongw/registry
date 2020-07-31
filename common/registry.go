@@ -58,7 +58,7 @@ func (s *Registry) Start(services map[string]string) {
 	s.services = services
 	s.unregister()
 	s.refresh()
-	time.AfterFunc(time.Second, s.run)
+	time.AfterFunc(500*time.Millisecond, s.run)
 }
 
 func (s *Registry) Stop() {

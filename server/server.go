@@ -14,7 +14,7 @@ import (
 
 const (
 	readWait         = common.MissTimes * common.PingInterval
-	writeWait        = 3 * time.Second
+	writeWait        = time.Second
 	maxMessageSize   = 100 * 1024
 	writeChannelSize = 128
 )
