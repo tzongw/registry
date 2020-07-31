@@ -121,7 +121,7 @@ var RandomCtx = context.Background()
 
 type tNodeSelector int
 
-var selector = tNodeSelector(0)
+var selector interface{} = tNodeSelector(0)
 var broadcast = 0
 var BroadcastCtx = context.WithValue(context.Background(), selector, broadcast)
 
@@ -136,12 +136,6 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 	}
 	if v := ctx.Value(selector); v != nil {
 		if addr, ok := v.(string); ok {
-			index := FindIndex(len(addresses), func(i int) bool {
-				return addresses[i] == addr
-			})
-			if index < 0 {
-				return ErrUnavailable
-			}
 			client := c.client(addr)
 			return client.Call(ctx, method, args, result)
 		} else {
