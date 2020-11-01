@@ -91,7 +91,7 @@ func (s *Registry) unregister() {
 func (s *Registry) refresh() {
 	log.Trace("refresh")
 	var keys []string
-	scan := s.client.Scan(0, Prefix+"*", 100)
+	scan := s.client.Scan(0, Prefix+":*", 100)
 	for i := scan.Iterator(); i.Next(); {
 		keys = append(keys, i.Val())
 	}
