@@ -16,14 +16,14 @@ type Factory interface {
 
 type Options struct {
 	PoolSize    int
-	PoolTimeout time.Duration
+	WaitTimeout time.Duration
 	IdleTimeout time.Duration // TODO:
 }
 
 func DefaultOptions() *Options {
 	return &Options{
 		PoolSize:    128,
-		PoolTimeout: time.Second,
+		WaitTimeout: time.Second,
 		IdleTimeout: time.Hour,
 	}
 }
@@ -75,7 +75,7 @@ func (p *Pool) Get() (interface{}, error) {
 	} else if p.size >= p.opt.PoolSize {
 		p.queue += 1
 		p.m.Unlock()
-		t := time.NewTimer(p.opt.PoolTimeout)
+		t := time.NewTimer(p.opt.WaitTimeout)
 		defer func() {
 			t.Stop()
 			p.m.Lock()
@@ -86,7 +86,7 @@ func (p *Pool) Get() (interface{}, error) {
 		case i := <-p.idleC:
 			return i, nil
 		case <-t.C:
-			log.Warnf("timeout %d", p.opt.PoolTimeout)
+			log.Warnf("timeout %d", p.opt.WaitTimeout)
 			return nil, ErrTimeout
 		}
 	} else {
