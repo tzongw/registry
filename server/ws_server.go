@@ -8,6 +8,7 @@ import (
 	"github.com/tzongw/registry/shared"
 	"net"
 	"net/http"
+	"strings"
 	"sync/atomic"
 )
 
@@ -30,10 +31,15 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		count := atomic.AddInt64(&clientCount, -1)
 		log.Info("-- client count ", count)
 	}()
-	v := r.URL.Query()
-	params := make(map[string]string, len(v))
-	for k := range v {
-		params[k] = v.Get(k)
+	params := make(map[string]string)
+	for k := range r.Header {
+		if strings.HasPrefix(k, "X-") {
+			params[k[len("X-"):]] = r.Header.Get(k)
+		}
+	}
+	query := r.URL.Query()
+	for k := range query {
+		params[k] = query.Get(k)
 	}
 	err = shared.UserClient.Login(common.RandomCtx, rpcAddr, connId, params)
 	if err != nil {

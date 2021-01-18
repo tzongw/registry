@@ -195,7 +195,7 @@ func joinGroup(connId, group string) error {
 		return ErrAlreadyInGroup // maybe join multi times
 	}
 	if c.Groups == nil {
-		c.Groups = make(map[string]struct{}, 1)
+		c.Groups = make(map[string]struct{})
 	}
 	c.Groups[group] = struct{}{}
 	g, ok := groups[group]
