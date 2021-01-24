@@ -35,6 +35,8 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	for k := range r.Header {
 		if strings.HasPrefix(k, "X-") {
 			params[k[len("X-"):]] = r.Header.Get(k)
+		} else if k == "Cookie" {
+			params[k] = r.Header.Get(k)
 		}
 	}
 	query := r.URL.Query()
