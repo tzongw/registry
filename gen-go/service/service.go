@@ -3,12 +3,12 @@
 
 package service
 
-import(
+import (
 	"bytes"
 	"context"
-	"reflect"
 	"fmt"
 	"github.com/apache/thrift/lib/go/thrift"
+	"reflect"
 )
 
 // (needed to ensure safety because of naive import list construction.)
@@ -18,158 +18,1525 @@ var _ = context.Background
 var _ = reflect.DeepEqual
 var _ = bytes.Equal
 
+type Timer interface {
+	// Parameters:
+	//  - Key
+	//  - ServiceName
+	//  - Data
+	//  - Delay
+	CallLater(ctx context.Context, key string, service_name string, data string, delay float64) (err error)
+	// Parameters:
+	//  - Key
+	//  - ServiceName
+	//  - Data
+	//  - Interval
+	CallRepeat(ctx context.Context, key string, service_name string, data string, interval float64) (err error)
+	// Parameters:
+	//  - Key
+	//  - ServiceName
+	RemoveTimer(ctx context.Context, key string, service_name string) (err error)
+}
+
+type TimerClient struct {
+	c thrift.TClient
+}
+
+func NewTimerClientFactory(t thrift.TTransport, f thrift.TProtocolFactory) *TimerClient {
+	return &TimerClient{
+		c: thrift.NewTStandardClient(f.GetProtocol(t), f.GetProtocol(t)),
+	}
+}
+
+func NewTimerClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, oprot thrift.TProtocol) *TimerClient {
+	return &TimerClient{
+		c: thrift.NewTStandardClient(iprot, oprot),
+	}
+}
+
+func NewTimerClient(c thrift.TClient) *TimerClient {
+	return &TimerClient{
+		c: c,
+	}
+}
+
+func (p *TimerClient) Client_() thrift.TClient {
+	return p.c
+}
+
+// Parameters:
+//  - Key
+//  - ServiceName
+//  - Data
+//  - Delay
+func (p *TimerClient) CallLater(ctx context.Context, key string, service_name string, data string, delay float64) (err error) {
+	var _args0 TimerCallLaterArgs
+	_args0.Key = key
+	_args0.ServiceName = service_name
+	_args0.Data = data
+	_args0.Delay = delay
+	var _result1 TimerCallLaterResult
+	if err = p.Client_().Call(ctx, "call_later", &_args0, &_result1); err != nil {
+		return
+	}
+	return nil
+}
+
+// Parameters:
+//  - Key
+//  - ServiceName
+//  - Data
+//  - Interval
+func (p *TimerClient) CallRepeat(ctx context.Context, key string, service_name string, data string, interval float64) (err error) {
+	var _args2 TimerCallRepeatArgs
+	_args2.Key = key
+	_args2.ServiceName = service_name
+	_args2.Data = data
+	_args2.Interval = interval
+	var _result3 TimerCallRepeatResult
+	if err = p.Client_().Call(ctx, "call_repeat", &_args2, &_result3); err != nil {
+		return
+	}
+	return nil
+}
+
+// Parameters:
+//  - Key
+//  - ServiceName
+func (p *TimerClient) RemoveTimer(ctx context.Context, key string, service_name string) (err error) {
+	var _args4 TimerRemoveTimerArgs
+	_args4.Key = key
+	_args4.ServiceName = service_name
+	var _result5 TimerRemoveTimerResult
+	if err = p.Client_().Call(ctx, "remove_timer", &_args4, &_result5); err != nil {
+		return
+	}
+	return nil
+}
+
+type TimerProcessor struct {
+	processorMap map[string]thrift.TProcessorFunction
+	handler      Timer
+}
+
+func (p *TimerProcessor) AddToProcessorMap(key string, processor thrift.TProcessorFunction) {
+	p.processorMap[key] = processor
+}
+
+func (p *TimerProcessor) GetProcessorFunction(key string) (processor thrift.TProcessorFunction, ok bool) {
+	processor, ok = p.processorMap[key]
+	return processor, ok
+}
+
+func (p *TimerProcessor) ProcessorMap() map[string]thrift.TProcessorFunction {
+	return p.processorMap
+}
+
+func NewTimerProcessor(handler Timer) *TimerProcessor {
+
+	self6 := &TimerProcessor{handler: handler, processorMap: make(map[string]thrift.TProcessorFunction)}
+	self6.processorMap["call_later"] = &timerProcessorCallLater{handler: handler}
+	self6.processorMap["call_repeat"] = &timerProcessorCallRepeat{handler: handler}
+	self6.processorMap["remove_timer"] = &timerProcessorRemoveTimer{handler: handler}
+	return self6
+}
+
+func (p *TimerProcessor) Process(ctx context.Context, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
+	name, _, seqId, err := iprot.ReadMessageBegin()
+	if err != nil {
+		return false, err
+	}
+	if processor, ok := p.GetProcessorFunction(name); ok {
+		return processor.Process(ctx, seqId, iprot, oprot)
+	}
+	iprot.Skip(thrift.STRUCT)
+	iprot.ReadMessageEnd()
+	x7 := thrift.NewTApplicationException(thrift.UNKNOWN_METHOD, "Unknown function "+name)
+	oprot.WriteMessageBegin(name, thrift.EXCEPTION, seqId)
+	x7.Write(oprot)
+	oprot.WriteMessageEnd()
+	oprot.Flush(ctx)
+	return false, x7
+
+}
+
+type timerProcessorCallLater struct {
+	handler Timer
+}
+
+func (p *timerProcessorCallLater) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
+	args := TimerCallLaterArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		x := thrift.NewTApplicationException(thrift.PROTOCOL_ERROR, err.Error())
+		oprot.WriteMessageBegin("call_later", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return false, err
+	}
+
+	iprot.ReadMessageEnd()
+	result := TimerCallLaterResult{}
+	var err2 error
+	if err2 = p.handler.CallLater(ctx, args.Key, args.ServiceName, args.Data, args.Delay); err2 != nil {
+		x := thrift.NewTApplicationException(thrift.INTERNAL_ERROR, "Internal error processing call_later: "+err2.Error())
+		oprot.WriteMessageBegin("call_later", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return true, err2
+	}
+	if err2 = oprot.WriteMessageBegin("call_later", thrift.REPLY, seqId); err2 != nil {
+		err = err2
+	}
+	if err2 = result.Write(oprot); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.WriteMessageEnd(); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.Flush(ctx); err == nil && err2 != nil {
+		err = err2
+	}
+	if err != nil {
+		return
+	}
+	return true, err
+}
+
+type timerProcessorCallRepeat struct {
+	handler Timer
+}
+
+func (p *timerProcessorCallRepeat) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
+	args := TimerCallRepeatArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		x := thrift.NewTApplicationException(thrift.PROTOCOL_ERROR, err.Error())
+		oprot.WriteMessageBegin("call_repeat", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return false, err
+	}
+
+	iprot.ReadMessageEnd()
+	result := TimerCallRepeatResult{}
+	var err2 error
+	if err2 = p.handler.CallRepeat(ctx, args.Key, args.ServiceName, args.Data, args.Interval); err2 != nil {
+		x := thrift.NewTApplicationException(thrift.INTERNAL_ERROR, "Internal error processing call_repeat: "+err2.Error())
+		oprot.WriteMessageBegin("call_repeat", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return true, err2
+	}
+	if err2 = oprot.WriteMessageBegin("call_repeat", thrift.REPLY, seqId); err2 != nil {
+		err = err2
+	}
+	if err2 = result.Write(oprot); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.WriteMessageEnd(); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.Flush(ctx); err == nil && err2 != nil {
+		err = err2
+	}
+	if err != nil {
+		return
+	}
+	return true, err
+}
+
+type timerProcessorRemoveTimer struct {
+	handler Timer
+}
+
+func (p *timerProcessorRemoveTimer) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
+	args := TimerRemoveTimerArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		x := thrift.NewTApplicationException(thrift.PROTOCOL_ERROR, err.Error())
+		oprot.WriteMessageBegin("remove_timer", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return false, err
+	}
+
+	iprot.ReadMessageEnd()
+	result := TimerRemoveTimerResult{}
+	var err2 error
+	if err2 = p.handler.RemoveTimer(ctx, args.Key, args.ServiceName); err2 != nil {
+		x := thrift.NewTApplicationException(thrift.INTERNAL_ERROR, "Internal error processing remove_timer: "+err2.Error())
+		oprot.WriteMessageBegin("remove_timer", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return true, err2
+	}
+	if err2 = oprot.WriteMessageBegin("remove_timer", thrift.REPLY, seqId); err2 != nil {
+		err = err2
+	}
+	if err2 = result.Write(oprot); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.WriteMessageEnd(); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.Flush(ctx); err == nil && err2 != nil {
+		err = err2
+	}
+	if err != nil {
+		return
+	}
+	return true, err
+}
+
+// HELPER FUNCTIONS AND STRUCTURES
+
+// Attributes:
+//  - Key
+//  - ServiceName
+//  - Data
+//  - Delay
+type TimerCallLaterArgs struct {
+	Key         string  `thrift:"key,1" db:"key" json:"key"`
+	ServiceName string  `thrift:"service_name,2" db:"service_name" json:"service_name"`
+	Data        string  `thrift:"data,3" db:"data" json:"data"`
+	Delay       float64 `thrift:"delay,4" db:"delay" json:"delay"`
+}
+
+func NewTimerCallLaterArgs() *TimerCallLaterArgs {
+	return &TimerCallLaterArgs{}
+}
+
+func (p *TimerCallLaterArgs) GetKey() string {
+	return p.Key
+}
+
+func (p *TimerCallLaterArgs) GetServiceName() string {
+	return p.ServiceName
+}
+
+func (p *TimerCallLaterArgs) GetData() string {
+	return p.Data
+}
+
+func (p *TimerCallLaterArgs) GetDelay() float64 {
+	return p.Delay
+}
+func (p *TimerCallLaterArgs) Read(iprot thrift.TProtocol) error {
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 3:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField3(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 4:
+			if fieldTypeId == thrift.DOUBLE {
+				if err := p.ReadField4(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
+}
+
+func (p *TimerCallLaterArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.Key = v
+	}
+	return nil
+}
+
+func (p *TimerCallLaterArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.ServiceName = v
+	}
+	return nil
+}
+
+func (p *TimerCallLaterArgs) ReadField3(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 3: ", err)
+	} else {
+		p.Data = v
+	}
+	return nil
+}
+
+func (p *TimerCallLaterArgs) ReadField4(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadDouble(); err != nil {
+		return thrift.PrependError("error reading field 4: ", err)
+	} else {
+		p.Delay = v
+	}
+	return nil
+}
+
+func (p *TimerCallLaterArgs) Write(oprot thrift.TProtocol) error {
+	if err := oprot.WriteStructBegin("call_later_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField3(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField4(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
+}
+
+func (p *TimerCallLaterArgs) writeField1(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("key", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:key: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Key)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.key (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:key: ", p), err)
+	}
+	return err
+}
+
+func (p *TimerCallLaterArgs) writeField2(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("service_name", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:service_name: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ServiceName)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.service_name (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:service_name: ", p), err)
+	}
+	return err
+}
+
+func (p *TimerCallLaterArgs) writeField3(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("data", thrift.STRING, 3); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:data: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Data)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.data (3) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:data: ", p), err)
+	}
+	return err
+}
+
+func (p *TimerCallLaterArgs) writeField4(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("delay", thrift.DOUBLE, 4); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 4:delay: ", p), err)
+	}
+	if err := oprot.WriteDouble(float64(p.Delay)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.delay (4) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 4:delay: ", p), err)
+	}
+	return err
+}
+
+func (p *TimerCallLaterArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("TimerCallLaterArgs(%+v)", *p)
+}
+
+type TimerCallLaterResult struct {
+}
+
+func NewTimerCallLaterResult() *TimerCallLaterResult {
+	return &TimerCallLaterResult{}
+}
+
+func (p *TimerCallLaterResult) Read(iprot thrift.TProtocol) error {
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		if err := iprot.Skip(fieldTypeId); err != nil {
+			return err
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
+}
+
+func (p *TimerCallLaterResult) Write(oprot thrift.TProtocol) error {
+	if err := oprot.WriteStructBegin("call_later_result"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
+}
+
+func (p *TimerCallLaterResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("TimerCallLaterResult(%+v)", *p)
+}
+
+// Attributes:
+//  - Key
+//  - ServiceName
+//  - Data
+//  - Interval
+type TimerCallRepeatArgs struct {
+	Key         string  `thrift:"key,1" db:"key" json:"key"`
+	ServiceName string  `thrift:"service_name,2" db:"service_name" json:"service_name"`
+	Data        string  `thrift:"data,3" db:"data" json:"data"`
+	Interval    float64 `thrift:"interval,4" db:"interval" json:"interval"`
+}
+
+func NewTimerCallRepeatArgs() *TimerCallRepeatArgs {
+	return &TimerCallRepeatArgs{}
+}
+
+func (p *TimerCallRepeatArgs) GetKey() string {
+	return p.Key
+}
+
+func (p *TimerCallRepeatArgs) GetServiceName() string {
+	return p.ServiceName
+}
+
+func (p *TimerCallRepeatArgs) GetData() string {
+	return p.Data
+}
+
+func (p *TimerCallRepeatArgs) GetInterval() float64 {
+	return p.Interval
+}
+func (p *TimerCallRepeatArgs) Read(iprot thrift.TProtocol) error {
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 3:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField3(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 4:
+			if fieldTypeId == thrift.DOUBLE {
+				if err := p.ReadField4(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
+}
+
+func (p *TimerCallRepeatArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.Key = v
+	}
+	return nil
+}
+
+func (p *TimerCallRepeatArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.ServiceName = v
+	}
+	return nil
+}
+
+func (p *TimerCallRepeatArgs) ReadField3(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 3: ", err)
+	} else {
+		p.Data = v
+	}
+	return nil
+}
+
+func (p *TimerCallRepeatArgs) ReadField4(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadDouble(); err != nil {
+		return thrift.PrependError("error reading field 4: ", err)
+	} else {
+		p.Interval = v
+	}
+	return nil
+}
+
+func (p *TimerCallRepeatArgs) Write(oprot thrift.TProtocol) error {
+	if err := oprot.WriteStructBegin("call_repeat_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField3(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField4(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
+}
+
+func (p *TimerCallRepeatArgs) writeField1(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("key", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:key: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Key)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.key (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:key: ", p), err)
+	}
+	return err
+}
+
+func (p *TimerCallRepeatArgs) writeField2(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("service_name", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:service_name: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ServiceName)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.service_name (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:service_name: ", p), err)
+	}
+	return err
+}
+
+func (p *TimerCallRepeatArgs) writeField3(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("data", thrift.STRING, 3); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:data: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Data)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.data (3) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:data: ", p), err)
+	}
+	return err
+}
+
+func (p *TimerCallRepeatArgs) writeField4(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("interval", thrift.DOUBLE, 4); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 4:interval: ", p), err)
+	}
+	if err := oprot.WriteDouble(float64(p.Interval)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.interval (4) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 4:interval: ", p), err)
+	}
+	return err
+}
+
+func (p *TimerCallRepeatArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("TimerCallRepeatArgs(%+v)", *p)
+}
+
+type TimerCallRepeatResult struct {
+}
+
+func NewTimerCallRepeatResult() *TimerCallRepeatResult {
+	return &TimerCallRepeatResult{}
+}
+
+func (p *TimerCallRepeatResult) Read(iprot thrift.TProtocol) error {
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		if err := iprot.Skip(fieldTypeId); err != nil {
+			return err
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
+}
+
+func (p *TimerCallRepeatResult) Write(oprot thrift.TProtocol) error {
+	if err := oprot.WriteStructBegin("call_repeat_result"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
+}
+
+func (p *TimerCallRepeatResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("TimerCallRepeatResult(%+v)", *p)
+}
+
+// Attributes:
+//  - Key
+//  - ServiceName
+type TimerRemoveTimerArgs struct {
+	Key         string `thrift:"key,1" db:"key" json:"key"`
+	ServiceName string `thrift:"service_name,2" db:"service_name" json:"service_name"`
+}
+
+func NewTimerRemoveTimerArgs() *TimerRemoveTimerArgs {
+	return &TimerRemoveTimerArgs{}
+}
+
+func (p *TimerRemoveTimerArgs) GetKey() string {
+	return p.Key
+}
+
+func (p *TimerRemoveTimerArgs) GetServiceName() string {
+	return p.ServiceName
+}
+func (p *TimerRemoveTimerArgs) Read(iprot thrift.TProtocol) error {
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
+}
+
+func (p *TimerRemoveTimerArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.Key = v
+	}
+	return nil
+}
+
+func (p *TimerRemoveTimerArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.ServiceName = v
+	}
+	return nil
+}
+
+func (p *TimerRemoveTimerArgs) Write(oprot thrift.TProtocol) error {
+	if err := oprot.WriteStructBegin("remove_timer_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
+}
+
+func (p *TimerRemoveTimerArgs) writeField1(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("key", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:key: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Key)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.key (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:key: ", p), err)
+	}
+	return err
+}
+
+func (p *TimerRemoveTimerArgs) writeField2(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("service_name", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:service_name: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ServiceName)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.service_name (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:service_name: ", p), err)
+	}
+	return err
+}
+
+func (p *TimerRemoveTimerArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("TimerRemoveTimerArgs(%+v)", *p)
+}
+
+type TimerRemoveTimerResult struct {
+}
+
+func NewTimerRemoveTimerResult() *TimerRemoveTimerResult {
+	return &TimerRemoveTimerResult{}
+}
+
+func (p *TimerRemoveTimerResult) Read(iprot thrift.TProtocol) error {
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		if err := iprot.Skip(fieldTypeId); err != nil {
+			return err
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
+}
+
+func (p *TimerRemoveTimerResult) Write(oprot thrift.TProtocol) error {
+	if err := oprot.WriteStructBegin("remove_timer_result"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
+}
+
+func (p *TimerRemoveTimerResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("TimerRemoveTimerResult(%+v)", *p)
+}
+
+type Timeout interface {
+	// Parameters:
+	//  - Key
+	//  - Data
+	Timeout(ctx context.Context, key string, data string) (err error)
+}
+
+type TimeoutClient struct {
+	c thrift.TClient
+}
+
+func NewTimeoutClientFactory(t thrift.TTransport, f thrift.TProtocolFactory) *TimeoutClient {
+	return &TimeoutClient{
+		c: thrift.NewTStandardClient(f.GetProtocol(t), f.GetProtocol(t)),
+	}
+}
+
+func NewTimeoutClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, oprot thrift.TProtocol) *TimeoutClient {
+	return &TimeoutClient{
+		c: thrift.NewTStandardClient(iprot, oprot),
+	}
+}
+
+func NewTimeoutClient(c thrift.TClient) *TimeoutClient {
+	return &TimeoutClient{
+		c: c,
+	}
+}
+
+func (p *TimeoutClient) Client_() thrift.TClient {
+	return p.c
+}
+
+// Parameters:
+//  - Key
+//  - Data
+func (p *TimeoutClient) Timeout(ctx context.Context, key string, data string) (err error) {
+	var _args18 TimeoutTimeoutArgs
+	_args18.Key = key
+	_args18.Data = data
+	var _result19 TimeoutTimeoutResult
+	if err = p.Client_().Call(ctx, "timeout", &_args18, &_result19); err != nil {
+		return
+	}
+	return nil
+}
+
+type TimeoutProcessor struct {
+	processorMap map[string]thrift.TProcessorFunction
+	handler      Timeout
+}
+
+func (p *TimeoutProcessor) AddToProcessorMap(key string, processor thrift.TProcessorFunction) {
+	p.processorMap[key] = processor
+}
+
+func (p *TimeoutProcessor) GetProcessorFunction(key string) (processor thrift.TProcessorFunction, ok bool) {
+	processor, ok = p.processorMap[key]
+	return processor, ok
+}
+
+func (p *TimeoutProcessor) ProcessorMap() map[string]thrift.TProcessorFunction {
+	return p.processorMap
+}
+
+func NewTimeoutProcessor(handler Timeout) *TimeoutProcessor {
+
+	self20 := &TimeoutProcessor{handler: handler, processorMap: make(map[string]thrift.TProcessorFunction)}
+	self20.processorMap["timeout"] = &timeoutProcessorTimeout{handler: handler}
+	return self20
+}
+
+func (p *TimeoutProcessor) Process(ctx context.Context, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
+	name, _, seqId, err := iprot.ReadMessageBegin()
+	if err != nil {
+		return false, err
+	}
+	if processor, ok := p.GetProcessorFunction(name); ok {
+		return processor.Process(ctx, seqId, iprot, oprot)
+	}
+	iprot.Skip(thrift.STRUCT)
+	iprot.ReadMessageEnd()
+	x21 := thrift.NewTApplicationException(thrift.UNKNOWN_METHOD, "Unknown function "+name)
+	oprot.WriteMessageBegin(name, thrift.EXCEPTION, seqId)
+	x21.Write(oprot)
+	oprot.WriteMessageEnd()
+	oprot.Flush(ctx)
+	return false, x21
+
+}
+
+type timeoutProcessorTimeout struct {
+	handler Timeout
+}
+
+func (p *timeoutProcessorTimeout) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
+	args := TimeoutTimeoutArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		x := thrift.NewTApplicationException(thrift.PROTOCOL_ERROR, err.Error())
+		oprot.WriteMessageBegin("timeout", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return false, err
+	}
+
+	iprot.ReadMessageEnd()
+	result := TimeoutTimeoutResult{}
+	var err2 error
+	if err2 = p.handler.Timeout(ctx, args.Key, args.Data); err2 != nil {
+		x := thrift.NewTApplicationException(thrift.INTERNAL_ERROR, "Internal error processing timeout: "+err2.Error())
+		oprot.WriteMessageBegin("timeout", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return true, err2
+	}
+	if err2 = oprot.WriteMessageBegin("timeout", thrift.REPLY, seqId); err2 != nil {
+		err = err2
+	}
+	if err2 = result.Write(oprot); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.WriteMessageEnd(); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.Flush(ctx); err == nil && err2 != nil {
+		err = err2
+	}
+	if err != nil {
+		return
+	}
+	return true, err
+}
+
+// HELPER FUNCTIONS AND STRUCTURES
+
+// Attributes:
+//  - Key
+//  - Data
+type TimeoutTimeoutArgs struct {
+	Key  string `thrift:"key,1" db:"key" json:"key"`
+	Data string `thrift:"data,2" db:"data" json:"data"`
+}
+
+func NewTimeoutTimeoutArgs() *TimeoutTimeoutArgs {
+	return &TimeoutTimeoutArgs{}
+}
+
+func (p *TimeoutTimeoutArgs) GetKey() string {
+	return p.Key
+}
+
+func (p *TimeoutTimeoutArgs) GetData() string {
+	return p.Data
+}
+func (p *TimeoutTimeoutArgs) Read(iprot thrift.TProtocol) error {
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
+}
+
+func (p *TimeoutTimeoutArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.Key = v
+	}
+	return nil
+}
+
+func (p *TimeoutTimeoutArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.Data = v
+	}
+	return nil
+}
+
+func (p *TimeoutTimeoutArgs) Write(oprot thrift.TProtocol) error {
+	if err := oprot.WriteStructBegin("timeout_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
+}
+
+func (p *TimeoutTimeoutArgs) writeField1(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("key", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:key: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Key)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.key (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:key: ", p), err)
+	}
+	return err
+}
+
+func (p *TimeoutTimeoutArgs) writeField2(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("data", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:data: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Data)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.data (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:data: ", p), err)
+	}
+	return err
+}
+
+func (p *TimeoutTimeoutArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("TimeoutTimeoutArgs(%+v)", *p)
+}
+
+type TimeoutTimeoutResult struct {
+}
+
+func NewTimeoutTimeoutResult() *TimeoutTimeoutResult {
+	return &TimeoutTimeoutResult{}
+}
+
+func (p *TimeoutTimeoutResult) Read(iprot thrift.TProtocol) error {
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		if err := iprot.Skip(fieldTypeId); err != nil {
+			return err
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
+}
+
+func (p *TimeoutTimeoutResult) Write(oprot thrift.TProtocol) error {
+	if err := oprot.WriteStructBegin("timeout_result"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
+}
+
+func (p *TimeoutTimeoutResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("TimeoutTimeoutResult(%+v)", *p)
+}
+
 type Gate interface {
-  // Parameters:
-  //  - ConnID
-  //  - Context
-  SetContext(ctx context.Context, conn_id string, context map[string]string) (err error)
-  // Parameters:
-  //  - ConnID
-  //  - Context
-  UnsetContext(ctx context.Context, conn_id string, context []string) (err error)
-  // Parameters:
-  //  - ConnID
-  RemoveConn(ctx context.Context, conn_id string) (err error)
-  // Parameters:
-  //  - ConnID
-  //  - Message
-  SendText(ctx context.Context, conn_id string, message string) (err error)
-  // Parameters:
-  //  - ConnID
-  //  - Message
-  SendBinary(ctx context.Context, conn_id string, message []byte) (err error)
-  // Parameters:
-  //  - ConnID
-  //  - Group
-  JoinGroup(ctx context.Context, conn_id string, group string) (err error)
-  // Parameters:
-  //  - ConnID
-  //  - Group
-  LeaveGroup(ctx context.Context, conn_id string, group string) (err error)
-  // Parameters:
-  //  - Group
-  //  - Exclude
-  //  - Message
-  BroadcastBinary(ctx context.Context, group string, exclude []string, message []byte) (err error)
-  // Parameters:
-  //  - Group
-  //  - Exclude
-  //  - Message
-  BroadcastText(ctx context.Context, group string, exclude []string, message string) (err error)
+	// Parameters:
+	//  - ConnID
+	//  - Key
+	//  - Value
+	SetContext(ctx context.Context, conn_id string, key string, value string) (err error)
+	// Parameters:
+	//  - ConnID
+	//  - Key
+	//  - Value
+	UnsetContext(ctx context.Context, conn_id string, key string, value string) (err error)
+	// Parameters:
+	//  - ConnID
+	RemoveConn(ctx context.Context, conn_id string) (err error)
+	// Parameters:
+	//  - ConnID
+	//  - Message
+	SendText(ctx context.Context, conn_id string, message string) (err error)
+	// Parameters:
+	//  - ConnID
+	//  - Message
+	SendBinary(ctx context.Context, conn_id string, message []byte) (err error)
+	// Parameters:
+	//  - ConnID
+	//  - Group
+	JoinGroup(ctx context.Context, conn_id string, group string) (err error)
+	// Parameters:
+	//  - ConnID
+	//  - Group
+	LeaveGroup(ctx context.Context, conn_id string, group string) (err error)
+	// Parameters:
+	//  - Group
+	//  - Exclude
+	//  - Message
+	BroadcastBinary(ctx context.Context, group string, exclude []string, message []byte) (err error)
+	// Parameters:
+	//  - Group
+	//  - Exclude
+	//  - Message
+	BroadcastText(ctx context.Context, group string, exclude []string, message string) (err error)
 }
 
 type GateClient struct {
-  c thrift.TClient
+	c thrift.TClient
 }
 
 func NewGateClientFactory(t thrift.TTransport, f thrift.TProtocolFactory) *GateClient {
-  return &GateClient{
-    c: thrift.NewTStandardClient(f.GetProtocol(t), f.GetProtocol(t)),
-  }
+	return &GateClient{
+		c: thrift.NewTStandardClient(f.GetProtocol(t), f.GetProtocol(t)),
+	}
 }
 
 func NewGateClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, oprot thrift.TProtocol) *GateClient {
-  return &GateClient{
-    c: thrift.NewTStandardClient(iprot, oprot),
-  }
+	return &GateClient{
+		c: thrift.NewTStandardClient(iprot, oprot),
+	}
 }
 
 func NewGateClient(c thrift.TClient) *GateClient {
-  return &GateClient{
-    c: c,
-  }
+	return &GateClient{
+		c: c,
+	}
 }
 
 func (p *GateClient) Client_() thrift.TClient {
-  return p.c
-}
-// Parameters:
-//  - ConnID
-//  - Context
-func (p *GateClient) SetContext(ctx context.Context, conn_id string, context map[string]string) (err error) {
-  var _args0 GateSetContextArgs
-  _args0.ConnID = conn_id
-  _args0.Context = context
-  if err := p.Client_().Call(ctx, "set_context", &_args0, nil); err != nil {
-    return err
-  }
-  return nil
+	return p.c
 }
 
 // Parameters:
 //  - ConnID
-//  - Context
-func (p *GateClient) UnsetContext(ctx context.Context, conn_id string, context []string) (err error) {
-  var _args1 GateUnsetContextArgs
-  _args1.ConnID = conn_id
-  _args1.Context = context
-  if err := p.Client_().Call(ctx, "unset_context", &_args1, nil); err != nil {
-    return err
-  }
-  return nil
+//  - Key
+//  - Value
+func (p *GateClient) SetContext(ctx context.Context, conn_id string, key string, value string) (err error) {
+	var _args24 GateSetContextArgs
+	_args24.ConnID = conn_id
+	_args24.Key = key
+	_args24.Value = value
+	if err := p.Client_().Call(ctx, "set_context", &_args24, nil); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Parameters:
+//  - ConnID
+//  - Key
+//  - Value
+func (p *GateClient) UnsetContext(ctx context.Context, conn_id string, key string, value string) (err error) {
+	var _args25 GateUnsetContextArgs
+	_args25.ConnID = conn_id
+	_args25.Key = key
+	_args25.Value = value
+	if err := p.Client_().Call(ctx, "unset_context", &_args25, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parameters:
 //  - ConnID
 func (p *GateClient) RemoveConn(ctx context.Context, conn_id string) (err error) {
-  var _args2 GateRemoveConnArgs
-  _args2.ConnID = conn_id
-  if err := p.Client_().Call(ctx, "remove_conn", &_args2, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args26 GateRemoveConnArgs
+	_args26.ConnID = conn_id
+	if err := p.Client_().Call(ctx, "remove_conn", &_args26, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parameters:
 //  - ConnID
 //  - Message
 func (p *GateClient) SendText(ctx context.Context, conn_id string, message string) (err error) {
-  var _args3 GateSendTextArgs
-  _args3.ConnID = conn_id
-  _args3.Message = message
-  if err := p.Client_().Call(ctx, "send_text", &_args3, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args27 GateSendTextArgs
+	_args27.ConnID = conn_id
+	_args27.Message = message
+	if err := p.Client_().Call(ctx, "send_text", &_args27, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parameters:
 //  - ConnID
 //  - Message
 func (p *GateClient) SendBinary(ctx context.Context, conn_id string, message []byte) (err error) {
-  var _args4 GateSendBinaryArgs
-  _args4.ConnID = conn_id
-  _args4.Message = message
-  if err := p.Client_().Call(ctx, "send_binary", &_args4, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args28 GateSendBinaryArgs
+	_args28.ConnID = conn_id
+	_args28.Message = message
+	if err := p.Client_().Call(ctx, "send_binary", &_args28, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parameters:
 //  - ConnID
 //  - Group
 func (p *GateClient) JoinGroup(ctx context.Context, conn_id string, group string) (err error) {
-  var _args5 GateJoinGroupArgs
-  _args5.ConnID = conn_id
-  _args5.Group = group
-  if err := p.Client_().Call(ctx, "join_group", &_args5, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args29 GateJoinGroupArgs
+	_args29.ConnID = conn_id
+	_args29.Group = group
+	if err := p.Client_().Call(ctx, "join_group", &_args29, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parameters:
 //  - ConnID
 //  - Group
 func (p *GateClient) LeaveGroup(ctx context.Context, conn_id string, group string) (err error) {
-  var _args6 GateLeaveGroupArgs
-  _args6.ConnID = conn_id
-  _args6.Group = group
-  if err := p.Client_().Call(ctx, "leave_group", &_args6, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args30 GateLeaveGroupArgs
+	_args30.ConnID = conn_id
+	_args30.Group = group
+	if err := p.Client_().Call(ctx, "leave_group", &_args30, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parameters:
@@ -177,14 +1544,14 @@ func (p *GateClient) LeaveGroup(ctx context.Context, conn_id string, group strin
 //  - Exclude
 //  - Message
 func (p *GateClient) BroadcastBinary(ctx context.Context, group string, exclude []string, message []byte) (err error) {
-  var _args7 GateBroadcastBinaryArgs
-  _args7.Group = group
-  _args7.Exclude = exclude
-  _args7.Message = message
-  if err := p.Client_().Call(ctx, "broadcast_binary", &_args7, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args31 GateBroadcastBinaryArgs
+	_args31.Group = group
+	_args31.Exclude = exclude
+	_args31.Message = message
+	if err := p.Client_().Call(ctx, "broadcast_binary", &_args31, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parameters:
@@ -192,1148 +1559,1260 @@ func (p *GateClient) BroadcastBinary(ctx context.Context, group string, exclude 
 //  - Exclude
 //  - Message
 func (p *GateClient) BroadcastText(ctx context.Context, group string, exclude []string, message string) (err error) {
-  var _args8 GateBroadcastTextArgs
-  _args8.Group = group
-  _args8.Exclude = exclude
-  _args8.Message = message
-  if err := p.Client_().Call(ctx, "broadcast_text", &_args8, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args32 GateBroadcastTextArgs
+	_args32.Group = group
+	_args32.Exclude = exclude
+	_args32.Message = message
+	if err := p.Client_().Call(ctx, "broadcast_text", &_args32, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 type GateProcessor struct {
-  processorMap map[string]thrift.TProcessorFunction
-  handler Gate
+	processorMap map[string]thrift.TProcessorFunction
+	handler      Gate
 }
 
 func (p *GateProcessor) AddToProcessorMap(key string, processor thrift.TProcessorFunction) {
-  p.processorMap[key] = processor
+	p.processorMap[key] = processor
 }
 
 func (p *GateProcessor) GetProcessorFunction(key string) (processor thrift.TProcessorFunction, ok bool) {
-  processor, ok = p.processorMap[key]
-  return processor, ok
+	processor, ok = p.processorMap[key]
+	return processor, ok
 }
 
 func (p *GateProcessor) ProcessorMap() map[string]thrift.TProcessorFunction {
-  return p.processorMap
+	return p.processorMap
 }
 
 func NewGateProcessor(handler Gate) *GateProcessor {
 
-  self9 := &GateProcessor{handler:handler, processorMap:make(map[string]thrift.TProcessorFunction)}
-  self9.processorMap["set_context"] = &gateProcessorSetContext{handler:handler}
-  self9.processorMap["unset_context"] = &gateProcessorUnsetContext{handler:handler}
-  self9.processorMap["remove_conn"] = &gateProcessorRemoveConn{handler:handler}
-  self9.processorMap["send_text"] = &gateProcessorSendText{handler:handler}
-  self9.processorMap["send_binary"] = &gateProcessorSendBinary{handler:handler}
-  self9.processorMap["join_group"] = &gateProcessorJoinGroup{handler:handler}
-  self9.processorMap["leave_group"] = &gateProcessorLeaveGroup{handler:handler}
-  self9.processorMap["broadcast_binary"] = &gateProcessorBroadcastBinary{handler:handler}
-  self9.processorMap["broadcast_text"] = &gateProcessorBroadcastText{handler:handler}
-return self9
+	self33 := &GateProcessor{handler: handler, processorMap: make(map[string]thrift.TProcessorFunction)}
+	self33.processorMap["set_context"] = &gateProcessorSetContext{handler: handler}
+	self33.processorMap["unset_context"] = &gateProcessorUnsetContext{handler: handler}
+	self33.processorMap["remove_conn"] = &gateProcessorRemoveConn{handler: handler}
+	self33.processorMap["send_text"] = &gateProcessorSendText{handler: handler}
+	self33.processorMap["send_binary"] = &gateProcessorSendBinary{handler: handler}
+	self33.processorMap["join_group"] = &gateProcessorJoinGroup{handler: handler}
+	self33.processorMap["leave_group"] = &gateProcessorLeaveGroup{handler: handler}
+	self33.processorMap["broadcast_binary"] = &gateProcessorBroadcastBinary{handler: handler}
+	self33.processorMap["broadcast_text"] = &gateProcessorBroadcastText{handler: handler}
+	return self33
 }
 
 func (p *GateProcessor) Process(ctx context.Context, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  name, _, seqId, err := iprot.ReadMessageBegin()
-  if err != nil { return false, err }
-  if processor, ok := p.GetProcessorFunction(name); ok {
-    return processor.Process(ctx, seqId, iprot, oprot)
-  }
-  iprot.Skip(thrift.STRUCT)
-  iprot.ReadMessageEnd()
-  x10 := thrift.NewTApplicationException(thrift.UNKNOWN_METHOD, "Unknown function " + name)
-  oprot.WriteMessageBegin(name, thrift.EXCEPTION, seqId)
-  x10.Write(oprot)
-  oprot.WriteMessageEnd()
-  oprot.Flush(ctx)
-  return false, x10
+	name, _, seqId, err := iprot.ReadMessageBegin()
+	if err != nil {
+		return false, err
+	}
+	if processor, ok := p.GetProcessorFunction(name); ok {
+		return processor.Process(ctx, seqId, iprot, oprot)
+	}
+	iprot.Skip(thrift.STRUCT)
+	iprot.ReadMessageEnd()
+	x34 := thrift.NewTApplicationException(thrift.UNKNOWN_METHOD, "Unknown function "+name)
+	oprot.WriteMessageBegin(name, thrift.EXCEPTION, seqId)
+	x34.Write(oprot)
+	oprot.WriteMessageEnd()
+	oprot.Flush(ctx)
+	return false, x34
 
 }
 
 type gateProcessorSetContext struct {
-  handler Gate
+	handler Gate
 }
 
 func (p *gateProcessorSetContext) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := GateSetContextArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := GateSetContextArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.SetContext(ctx, args.ConnID, args.Context); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.SetContext(ctx, args.ConnID, args.Key, args.Value); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type gateProcessorUnsetContext struct {
-  handler Gate
+	handler Gate
 }
 
 func (p *gateProcessorUnsetContext) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := GateUnsetContextArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := GateUnsetContextArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.UnsetContext(ctx, args.ConnID, args.Context); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.UnsetContext(ctx, args.ConnID, args.Key, args.Value); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type gateProcessorRemoveConn struct {
-  handler Gate
+	handler Gate
 }
 
 func (p *gateProcessorRemoveConn) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := GateRemoveConnArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := GateRemoveConnArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.RemoveConn(ctx, args.ConnID); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.RemoveConn(ctx, args.ConnID); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type gateProcessorSendText struct {
-  handler Gate
+	handler Gate
 }
 
 func (p *gateProcessorSendText) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := GateSendTextArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := GateSendTextArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.SendText(ctx, args.ConnID, args.Message); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.SendText(ctx, args.ConnID, args.Message); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type gateProcessorSendBinary struct {
-  handler Gate
+	handler Gate
 }
 
 func (p *gateProcessorSendBinary) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := GateSendBinaryArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := GateSendBinaryArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.SendBinary(ctx, args.ConnID, args.Message); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.SendBinary(ctx, args.ConnID, args.Message); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type gateProcessorJoinGroup struct {
-  handler Gate
+	handler Gate
 }
 
 func (p *gateProcessorJoinGroup) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := GateJoinGroupArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := GateJoinGroupArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.JoinGroup(ctx, args.ConnID, args.Group); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.JoinGroup(ctx, args.ConnID, args.Group); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type gateProcessorLeaveGroup struct {
-  handler Gate
+	handler Gate
 }
 
 func (p *gateProcessorLeaveGroup) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := GateLeaveGroupArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := GateLeaveGroupArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.LeaveGroup(ctx, args.ConnID, args.Group); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.LeaveGroup(ctx, args.ConnID, args.Group); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type gateProcessorBroadcastBinary struct {
-  handler Gate
+	handler Gate
 }
 
 func (p *gateProcessorBroadcastBinary) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := GateBroadcastBinaryArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := GateBroadcastBinaryArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.BroadcastBinary(ctx, args.Group, args.Exclude, args.Message); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.BroadcastBinary(ctx, args.Group, args.Exclude, args.Message); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type gateProcessorBroadcastText struct {
-  handler Gate
+	handler Gate
 }
 
 func (p *gateProcessorBroadcastText) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := GateBroadcastTextArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := GateBroadcastTextArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.BroadcastText(ctx, args.Group, args.Exclude, args.Message); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.BroadcastText(ctx, args.Group, args.Exclude, args.Message); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
-
 
 // HELPER FUNCTIONS AND STRUCTURES
 
 // Attributes:
 //  - ConnID
-//  - Context
+//  - Key
+//  - Value
 type GateSetContextArgs struct {
-  ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
-  Context map[string]string `thrift:"context,2" db:"context" json:"context"`
+	ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
+	Key    string `thrift:"key,2" db:"key" json:"key"`
+	Value  string `thrift:"value,3" db:"value" json:"value"`
 }
 
 func NewGateSetContextArgs() *GateSetContextArgs {
-  return &GateSetContextArgs{}
+	return &GateSetContextArgs{}
 }
-
 
 func (p *GateSetContextArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 
-func (p *GateSetContextArgs) GetContext() map[string]string {
-  return p.Context
+func (p *GateSetContextArgs) GetKey() string {
+	return p.Key
+}
+
+func (p *GateSetContextArgs) GetValue() string {
+	return p.Value
 }
 func (p *GateSetContextArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.MAP {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 3:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField3(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *GateSetContextArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
+func (p *GateSetContextArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
 
-func (p *GateSetContextArgs)  ReadField2(iprot thrift.TProtocol) error {
-  _, _, size, err := iprot.ReadMapBegin()
-  if err != nil {
-    return thrift.PrependError("error reading map begin: ", err)
-  }
-  tMap := make(map[string]string, size)
-  p.Context =  tMap
-  for i := 0; i < size; i ++ {
-var _key11 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _key11 = v
+func (p *GateSetContextArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.Key = v
+	}
+	return nil
 }
-var _val12 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _val12 = v
-}
-    p.Context[_key11] = _val12
-  }
-  if err := iprot.ReadMapEnd(); err != nil {
-    return thrift.PrependError("error reading map end: ", err)
-  }
-  return nil
+
+func (p *GateSetContextArgs) ReadField3(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 3: ", err)
+	} else {
+		p.Value = v
+	}
+	return nil
 }
 
 func (p *GateSetContextArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("set_context_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("set_context_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField3(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *GateSetContextArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *GateSetContextArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("context", thrift.MAP, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:context: ", p), err) }
-  if err := oprot.WriteMapBegin(thrift.STRING, thrift.STRING, len(p.Context)); err != nil {
-    return thrift.PrependError("error writing map begin: ", err)
-  }
-  for k, v := range p.Context {
-    if err := oprot.WriteString(string(k)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-    if err := oprot.WriteString(string(v)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-  }
-  if err := oprot.WriteMapEnd(); err != nil {
-    return thrift.PrependError("error writing map end: ", err)
-  }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:context: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("key", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:key: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Key)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.key (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:key: ", p), err)
+	}
+	return err
+}
+
+func (p *GateSetContextArgs) writeField3(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("value", thrift.STRING, 3); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:value: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Value)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.value (3) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:value: ", p), err)
+	}
+	return err
 }
 
 func (p *GateSetContextArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("GateSetContextArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GateSetContextArgs(%+v)", *p)
 }
 
 // Attributes:
 //  - ConnID
-//  - Context
+//  - Key
+//  - Value
 type GateUnsetContextArgs struct {
-  ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
-  Context []string `thrift:"context,2" db:"context" json:"context"`
+	ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
+	Key    string `thrift:"key,2" db:"key" json:"key"`
+	Value  string `thrift:"value,3" db:"value" json:"value"`
 }
 
 func NewGateUnsetContextArgs() *GateUnsetContextArgs {
-  return &GateUnsetContextArgs{}
+	return &GateUnsetContextArgs{}
 }
-
 
 func (p *GateUnsetContextArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 
-func (p *GateUnsetContextArgs) GetContext() []string {
-  return p.Context
+func (p *GateUnsetContextArgs) GetKey() string {
+	return p.Key
+}
+
+func (p *GateUnsetContextArgs) GetValue() string {
+	return p.Value
 }
 func (p *GateUnsetContextArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.SET {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 3:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField3(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *GateUnsetContextArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
+func (p *GateUnsetContextArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
 
-func (p *GateUnsetContextArgs)  ReadField2(iprot thrift.TProtocol) error {
-  _, size, err := iprot.ReadSetBegin()
-  if err != nil {
-    return thrift.PrependError("error reading set begin: ", err)
-  }
-  tSet := make([]string, 0, size)
-  p.Context =  tSet
-  for i := 0; i < size; i ++ {
-var _elem13 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _elem13 = v
+func (p *GateUnsetContextArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.Key = v
+	}
+	return nil
 }
-    p.Context = append(p.Context, _elem13)
-  }
-  if err := iprot.ReadSetEnd(); err != nil {
-    return thrift.PrependError("error reading set end: ", err)
-  }
-  return nil
+
+func (p *GateUnsetContextArgs) ReadField3(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 3: ", err)
+	} else {
+		p.Value = v
+	}
+	return nil
 }
 
 func (p *GateUnsetContextArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("unset_context_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("unset_context_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField3(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *GateUnsetContextArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *GateUnsetContextArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("context", thrift.SET, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:context: ", p), err) }
-  if err := oprot.WriteSetBegin(thrift.STRING, len(p.Context)); err != nil {
-    return thrift.PrependError("error writing set begin: ", err)
-  }
-  for i := 0; i<len(p.Context); i++ {
-    for j := i+1; j<len(p.Context); j++ {
-      if reflect.DeepEqual(p.Context[i],p.Context[j]) { 
-        return thrift.PrependError("", fmt.Errorf("%T error writing set field: slice is not unique", p.Context[i]))
-      }
-    }
-  }
-  for _, v := range p.Context {
-    if err := oprot.WriteString(string(v)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-  }
-  if err := oprot.WriteSetEnd(); err != nil {
-    return thrift.PrependError("error writing set end: ", err)
-  }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:context: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("key", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:key: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Key)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.key (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:key: ", p), err)
+	}
+	return err
+}
+
+func (p *GateUnsetContextArgs) writeField3(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("value", thrift.STRING, 3); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:value: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Value)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.value (3) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:value: ", p), err)
+	}
+	return err
 }
 
 func (p *GateUnsetContextArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("GateUnsetContextArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GateUnsetContextArgs(%+v)", *p)
 }
 
 // Attributes:
 //  - ConnID
 type GateRemoveConnArgs struct {
-  ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
+	ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
 }
 
 func NewGateRemoveConnArgs() *GateRemoveConnArgs {
-  return &GateRemoveConnArgs{}
+	return &GateRemoveConnArgs{}
 }
-
 
 func (p *GateRemoveConnArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 func (p *GateRemoveConnArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *GateRemoveConnArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
+func (p *GateRemoveConnArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
 
 func (p *GateRemoveConnArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("remove_conn_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("remove_conn_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *GateRemoveConnArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *GateRemoveConnArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("GateRemoveConnArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GateRemoveConnArgs(%+v)", *p)
 }
 
 // Attributes:
 //  - ConnID
 //  - Message
 type GateSendTextArgs struct {
-  ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
-  Message string `thrift:"message,2" db:"message" json:"message"`
+	ConnID  string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
+	Message string `thrift:"message,2" db:"message" json:"message"`
 }
 
 func NewGateSendTextArgs() *GateSendTextArgs {
-  return &GateSendTextArgs{}
+	return &GateSendTextArgs{}
 }
 
-
 func (p *GateSendTextArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 
 func (p *GateSendTextArgs) GetMessage() string {
-  return p.Message
+	return p.Message
 }
 func (p *GateSendTextArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *GateSendTextArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
+func (p *GateSendTextArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
 
-func (p *GateSendTextArgs)  ReadField2(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 2: ", err)
-} else {
-  p.Message = v
-}
-  return nil
+func (p *GateSendTextArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.Message = v
+	}
+	return nil
 }
 
 func (p *GateSendTextArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("send_text_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("send_text_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *GateSendTextArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *GateSendTextArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("message", thrift.STRING, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:message: ", p), err) }
-  if err := oprot.WriteString(string(p.Message)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.message (2) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:message: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("message", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:message: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Message)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.message (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:message: ", p), err)
+	}
+	return err
 }
 
 func (p *GateSendTextArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("GateSendTextArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GateSendTextArgs(%+v)", *p)
 }
 
 // Attributes:
 //  - ConnID
 //  - Message
 type GateSendBinaryArgs struct {
-  ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
-  Message []byte `thrift:"message,2" db:"message" json:"message"`
+	ConnID  string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
+	Message []byte `thrift:"message,2" db:"message" json:"message"`
 }
 
 func NewGateSendBinaryArgs() *GateSendBinaryArgs {
-  return &GateSendBinaryArgs{}
+	return &GateSendBinaryArgs{}
 }
 
-
 func (p *GateSendBinaryArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 
 func (p *GateSendBinaryArgs) GetMessage() []byte {
-  return p.Message
+	return p.Message
 }
 func (p *GateSendBinaryArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *GateSendBinaryArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
+func (p *GateSendBinaryArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
 
-func (p *GateSendBinaryArgs)  ReadField2(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadBinary(); err != nil {
-  return thrift.PrependError("error reading field 2: ", err)
-} else {
-  p.Message = v
-}
-  return nil
+func (p *GateSendBinaryArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadBinary(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.Message = v
+	}
+	return nil
 }
 
 func (p *GateSendBinaryArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("send_binary_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("send_binary_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *GateSendBinaryArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *GateSendBinaryArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("message", thrift.STRING, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:message: ", p), err) }
-  if err := oprot.WriteBinary(p.Message); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.message (2) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:message: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("message", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:message: ", p), err)
+	}
+	if err := oprot.WriteBinary(p.Message); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.message (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:message: ", p), err)
+	}
+	return err
 }
 
 func (p *GateSendBinaryArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("GateSendBinaryArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GateSendBinaryArgs(%+v)", *p)
 }
 
 // Attributes:
 //  - ConnID
 //  - Group
 type GateJoinGroupArgs struct {
-  ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
-  Group string `thrift:"group,2" db:"group" json:"group"`
+	ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
+	Group  string `thrift:"group,2" db:"group" json:"group"`
 }
 
 func NewGateJoinGroupArgs() *GateJoinGroupArgs {
-  return &GateJoinGroupArgs{}
+	return &GateJoinGroupArgs{}
 }
 
-
 func (p *GateJoinGroupArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 
 func (p *GateJoinGroupArgs) GetGroup() string {
-  return p.Group
+	return p.Group
 }
 func (p *GateJoinGroupArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *GateJoinGroupArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
+func (p *GateJoinGroupArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
 
-func (p *GateJoinGroupArgs)  ReadField2(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 2: ", err)
-} else {
-  p.Group = v
-}
-  return nil
+func (p *GateJoinGroupArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.Group = v
+	}
+	return nil
 }
 
 func (p *GateJoinGroupArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("join_group_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("join_group_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *GateJoinGroupArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *GateJoinGroupArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("group", thrift.STRING, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:group: ", p), err) }
-  if err := oprot.WriteString(string(p.Group)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.group (2) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:group: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("group", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:group: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Group)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.group (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:group: ", p), err)
+	}
+	return err
 }
 
 func (p *GateJoinGroupArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("GateJoinGroupArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GateJoinGroupArgs(%+v)", *p)
 }
 
 // Attributes:
 //  - ConnID
 //  - Group
 type GateLeaveGroupArgs struct {
-  ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
-  Group string `thrift:"group,2" db:"group" json:"group"`
+	ConnID string `thrift:"conn_id,1" db:"conn_id" json:"conn_id"`
+	Group  string `thrift:"group,2" db:"group" json:"group"`
 }
 
 func NewGateLeaveGroupArgs() *GateLeaveGroupArgs {
-  return &GateLeaveGroupArgs{}
+	return &GateLeaveGroupArgs{}
 }
 
-
 func (p *GateLeaveGroupArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 
 func (p *GateLeaveGroupArgs) GetGroup() string {
-  return p.Group
+	return p.Group
 }
 func (p *GateLeaveGroupArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *GateLeaveGroupArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
+func (p *GateLeaveGroupArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
 
-func (p *GateLeaveGroupArgs)  ReadField2(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 2: ", err)
-} else {
-  p.Group = v
-}
-  return nil
+func (p *GateLeaveGroupArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.Group = v
+	}
+	return nil
 }
 
 func (p *GateLeaveGroupArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("leave_group_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("leave_group_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *GateLeaveGroupArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *GateLeaveGroupArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("group", thrift.STRING, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:group: ", p), err) }
-  if err := oprot.WriteString(string(p.Group)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.group (2) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:group: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("group", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:group: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Group)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.group (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:group: ", p), err)
+	}
+	return err
 }
 
 func (p *GateLeaveGroupArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("GateLeaveGroupArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GateLeaveGroupArgs(%+v)", *p)
 }
 
 // Attributes:
@@ -1341,190 +2820,208 @@ func (p *GateLeaveGroupArgs) String() string {
 //  - Exclude
 //  - Message
 type GateBroadcastBinaryArgs struct {
-  Group string `thrift:"group,1" db:"group" json:"group"`
-  Exclude []string `thrift:"exclude,2" db:"exclude" json:"exclude"`
-  Message []byte `thrift:"message,3" db:"message" json:"message"`
+	Group   string   `thrift:"group,1" db:"group" json:"group"`
+	Exclude []string `thrift:"exclude,2" db:"exclude" json:"exclude"`
+	Message []byte   `thrift:"message,3" db:"message" json:"message"`
 }
 
 func NewGateBroadcastBinaryArgs() *GateBroadcastBinaryArgs {
-  return &GateBroadcastBinaryArgs{}
+	return &GateBroadcastBinaryArgs{}
 }
 
-
 func (p *GateBroadcastBinaryArgs) GetGroup() string {
-  return p.Group
+	return p.Group
 }
 
 func (p *GateBroadcastBinaryArgs) GetExclude() []string {
-  return p.Exclude
+	return p.Exclude
 }
 
 func (p *GateBroadcastBinaryArgs) GetMessage() []byte {
-  return p.Message
+	return p.Message
 }
 func (p *GateBroadcastBinaryArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.SET {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 3:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField3(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
-}
-
-func (p *GateBroadcastBinaryArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.Group = v
-}
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.SET {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 3:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField3(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *GateBroadcastBinaryArgs)  ReadField2(iprot thrift.TProtocol) error {
-  _, size, err := iprot.ReadSetBegin()
-  if err != nil {
-    return thrift.PrependError("error reading set begin: ", err)
-  }
-  tSet := make([]string, 0, size)
-  p.Exclude =  tSet
-  for i := 0; i < size; i ++ {
-var _elem14 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _elem14 = v
-}
-    p.Exclude = append(p.Exclude, _elem14)
-  }
-  if err := iprot.ReadSetEnd(); err != nil {
-    return thrift.PrependError("error reading set end: ", err)
-  }
-  return nil
+func (p *GateBroadcastBinaryArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.Group = v
+	}
+	return nil
 }
 
-func (p *GateBroadcastBinaryArgs)  ReadField3(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadBinary(); err != nil {
-  return thrift.PrependError("error reading field 3: ", err)
-} else {
-  p.Message = v
+func (p *GateBroadcastBinaryArgs) ReadField2(iprot thrift.TProtocol) error {
+	_, size, err := iprot.ReadSetBegin()
+	if err != nil {
+		return thrift.PrependError("error reading set begin: ", err)
+	}
+	tSet := make([]string, 0, size)
+	p.Exclude = tSet
+	for i := 0; i < size; i++ {
+		var _elem35 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_elem35 = v
+		}
+		p.Exclude = append(p.Exclude, _elem35)
+	}
+	if err := iprot.ReadSetEnd(); err != nil {
+		return thrift.PrependError("error reading set end: ", err)
+	}
+	return nil
 }
-  return nil
+
+func (p *GateBroadcastBinaryArgs) ReadField3(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadBinary(); err != nil {
+		return thrift.PrependError("error reading field 3: ", err)
+	} else {
+		p.Message = v
+	}
+	return nil
 }
 
 func (p *GateBroadcastBinaryArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("broadcast_binary_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-    if err := p.writeField3(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("broadcast_binary_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField3(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *GateBroadcastBinaryArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("group", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:group: ", p), err) }
-  if err := oprot.WriteString(string(p.Group)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.group (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:group: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("group", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:group: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Group)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.group (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:group: ", p), err)
+	}
+	return err
 }
 
 func (p *GateBroadcastBinaryArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("exclude", thrift.SET, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:exclude: ", p), err) }
-  if err := oprot.WriteSetBegin(thrift.STRING, len(p.Exclude)); err != nil {
-    return thrift.PrependError("error writing set begin: ", err)
-  }
-  for i := 0; i<len(p.Exclude); i++ {
-    for j := i+1; j<len(p.Exclude); j++ {
-      if reflect.DeepEqual(p.Exclude[i],p.Exclude[j]) { 
-        return thrift.PrependError("", fmt.Errorf("%T error writing set field: slice is not unique", p.Exclude[i]))
-      }
-    }
-  }
-  for _, v := range p.Exclude {
-    if err := oprot.WriteString(string(v)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-  }
-  if err := oprot.WriteSetEnd(); err != nil {
-    return thrift.PrependError("error writing set end: ", err)
-  }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:exclude: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("exclude", thrift.SET, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:exclude: ", p), err)
+	}
+	if err := oprot.WriteSetBegin(thrift.STRING, len(p.Exclude)); err != nil {
+		return thrift.PrependError("error writing set begin: ", err)
+	}
+	for i := 0; i < len(p.Exclude); i++ {
+		for j := i + 1; j < len(p.Exclude); j++ {
+			if reflect.DeepEqual(p.Exclude[i], p.Exclude[j]) {
+				return thrift.PrependError("", fmt.Errorf("%T error writing set field: slice is not unique", p.Exclude[i]))
+			}
+		}
+	}
+	for _, v := range p.Exclude {
+		if err := oprot.WriteString(string(v)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+	}
+	if err := oprot.WriteSetEnd(); err != nil {
+		return thrift.PrependError("error writing set end: ", err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:exclude: ", p), err)
+	}
+	return err
 }
 
 func (p *GateBroadcastBinaryArgs) writeField3(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("message", thrift.STRING, 3); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:message: ", p), err) }
-  if err := oprot.WriteBinary(p.Message); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.message (3) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 3:message: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("message", thrift.STRING, 3); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:message: ", p), err)
+	}
+	if err := oprot.WriteBinary(p.Message); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.message (3) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:message: ", p), err)
+	}
+	return err
 }
 
 func (p *GateBroadcastBinaryArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("GateBroadcastBinaryArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GateBroadcastBinaryArgs(%+v)", *p)
 }
 
 // Attributes:
@@ -1532,261 +3029,273 @@ func (p *GateBroadcastBinaryArgs) String() string {
 //  - Exclude
 //  - Message
 type GateBroadcastTextArgs struct {
-  Group string `thrift:"group,1" db:"group" json:"group"`
-  Exclude []string `thrift:"exclude,2" db:"exclude" json:"exclude"`
-  Message string `thrift:"message,3" db:"message" json:"message"`
+	Group   string   `thrift:"group,1" db:"group" json:"group"`
+	Exclude []string `thrift:"exclude,2" db:"exclude" json:"exclude"`
+	Message string   `thrift:"message,3" db:"message" json:"message"`
 }
 
 func NewGateBroadcastTextArgs() *GateBroadcastTextArgs {
-  return &GateBroadcastTextArgs{}
+	return &GateBroadcastTextArgs{}
 }
 
-
 func (p *GateBroadcastTextArgs) GetGroup() string {
-  return p.Group
+	return p.Group
 }
 
 func (p *GateBroadcastTextArgs) GetExclude() []string {
-  return p.Exclude
+	return p.Exclude
 }
 
 func (p *GateBroadcastTextArgs) GetMessage() string {
-  return p.Message
+	return p.Message
 }
 func (p *GateBroadcastTextArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.SET {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 3:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField3(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
-}
-
-func (p *GateBroadcastTextArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.Group = v
-}
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.SET {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 3:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField3(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *GateBroadcastTextArgs)  ReadField2(iprot thrift.TProtocol) error {
-  _, size, err := iprot.ReadSetBegin()
-  if err != nil {
-    return thrift.PrependError("error reading set begin: ", err)
-  }
-  tSet := make([]string, 0, size)
-  p.Exclude =  tSet
-  for i := 0; i < size; i ++ {
-var _elem15 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _elem15 = v
-}
-    p.Exclude = append(p.Exclude, _elem15)
-  }
-  if err := iprot.ReadSetEnd(); err != nil {
-    return thrift.PrependError("error reading set end: ", err)
-  }
-  return nil
+func (p *GateBroadcastTextArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.Group = v
+	}
+	return nil
 }
 
-func (p *GateBroadcastTextArgs)  ReadField3(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 3: ", err)
-} else {
-  p.Message = v
+func (p *GateBroadcastTextArgs) ReadField2(iprot thrift.TProtocol) error {
+	_, size, err := iprot.ReadSetBegin()
+	if err != nil {
+		return thrift.PrependError("error reading set begin: ", err)
+	}
+	tSet := make([]string, 0, size)
+	p.Exclude = tSet
+	for i := 0; i < size; i++ {
+		var _elem36 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_elem36 = v
+		}
+		p.Exclude = append(p.Exclude, _elem36)
+	}
+	if err := iprot.ReadSetEnd(); err != nil {
+		return thrift.PrependError("error reading set end: ", err)
+	}
+	return nil
 }
-  return nil
+
+func (p *GateBroadcastTextArgs) ReadField3(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 3: ", err)
+	} else {
+		p.Message = v
+	}
+	return nil
 }
 
 func (p *GateBroadcastTextArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("broadcast_text_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-    if err := p.writeField3(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("broadcast_text_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField3(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *GateBroadcastTextArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("group", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:group: ", p), err) }
-  if err := oprot.WriteString(string(p.Group)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.group (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:group: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("group", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:group: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Group)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.group (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:group: ", p), err)
+	}
+	return err
 }
 
 func (p *GateBroadcastTextArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("exclude", thrift.SET, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:exclude: ", p), err) }
-  if err := oprot.WriteSetBegin(thrift.STRING, len(p.Exclude)); err != nil {
-    return thrift.PrependError("error writing set begin: ", err)
-  }
-  for i := 0; i<len(p.Exclude); i++ {
-    for j := i+1; j<len(p.Exclude); j++ {
-      if reflect.DeepEqual(p.Exclude[i],p.Exclude[j]) { 
-        return thrift.PrependError("", fmt.Errorf("%T error writing set field: slice is not unique", p.Exclude[i]))
-      }
-    }
-  }
-  for _, v := range p.Exclude {
-    if err := oprot.WriteString(string(v)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-  }
-  if err := oprot.WriteSetEnd(); err != nil {
-    return thrift.PrependError("error writing set end: ", err)
-  }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:exclude: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("exclude", thrift.SET, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:exclude: ", p), err)
+	}
+	if err := oprot.WriteSetBegin(thrift.STRING, len(p.Exclude)); err != nil {
+		return thrift.PrependError("error writing set begin: ", err)
+	}
+	for i := 0; i < len(p.Exclude); i++ {
+		for j := i + 1; j < len(p.Exclude); j++ {
+			if reflect.DeepEqual(p.Exclude[i], p.Exclude[j]) {
+				return thrift.PrependError("", fmt.Errorf("%T error writing set field: slice is not unique", p.Exclude[i]))
+			}
+		}
+	}
+	for _, v := range p.Exclude {
+		if err := oprot.WriteString(string(v)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+	}
+	if err := oprot.WriteSetEnd(); err != nil {
+		return thrift.PrependError("error writing set end: ", err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:exclude: ", p), err)
+	}
+	return err
 }
 
 func (p *GateBroadcastTextArgs) writeField3(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("message", thrift.STRING, 3); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:message: ", p), err) }
-  if err := oprot.WriteString(string(p.Message)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.message (3) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 3:message: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("message", thrift.STRING, 3); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:message: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Message)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.message (3) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:message: ", p), err)
+	}
+	return err
 }
 
 func (p *GateBroadcastTextArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("GateBroadcastTextArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GateBroadcastTextArgs(%+v)", *p)
 }
 
-
 type User interface {
-  // Parameters:
-  //  - Address
-  //  - ConnID
-  //  - Params
-  Login(ctx context.Context, address string, conn_id string, params map[string]string) (err error)
-  // Parameters:
-  //  - Address
-  //  - ConnID
-  //  - Context
-  Ping(ctx context.Context, address string, conn_id string, context map[string]string) (err error)
-  // Parameters:
-  //  - Address
-  //  - ConnID
-  //  - Context
-  Disconnect(ctx context.Context, address string, conn_id string, context map[string]string) (err error)
-  // Parameters:
-  //  - Address
-  //  - ConnID
-  //  - Context
-  //  - Message
-  RecvBinary(ctx context.Context, address string, conn_id string, context map[string]string, message []byte) (err error)
-  // Parameters:
-  //  - Address
-  //  - ConnID
-  //  - Context
-  //  - Message
-  RecvText(ctx context.Context, address string, conn_id string, context map[string]string, message string) (err error)
+	Timeout
+
+	// Parameters:
+	//  - Address
+	//  - ConnID
+	//  - Params
+	Login(ctx context.Context, address string, conn_id string, params map[string]string) (err error)
+	// Parameters:
+	//  - Address
+	//  - ConnID
+	//  - Context
+	Ping(ctx context.Context, address string, conn_id string, context map[string]string) (err error)
+	// Parameters:
+	//  - Address
+	//  - ConnID
+	//  - Context
+	Disconnect(ctx context.Context, address string, conn_id string, context map[string]string) (err error)
+	// Parameters:
+	//  - Address
+	//  - ConnID
+	//  - Context
+	//  - Message
+	RecvBinary(ctx context.Context, address string, conn_id string, context map[string]string, message []byte) (err error)
+	// Parameters:
+	//  - Address
+	//  - ConnID
+	//  - Context
+	//  - Message
+	RecvText(ctx context.Context, address string, conn_id string, context map[string]string, message string) (err error)
 }
 
 type UserClient struct {
-  c thrift.TClient
+	*TimeoutClient
 }
 
 func NewUserClientFactory(t thrift.TTransport, f thrift.TProtocolFactory) *UserClient {
-  return &UserClient{
-    c: thrift.NewTStandardClient(f.GetProtocol(t), f.GetProtocol(t)),
-  }
+	return &UserClient{TimeoutClient: NewTimeoutClientFactory(t, f)}
 }
 
 func NewUserClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, oprot thrift.TProtocol) *UserClient {
-  return &UserClient{
-    c: thrift.NewTStandardClient(iprot, oprot),
-  }
+	return &UserClient{TimeoutClient: NewTimeoutClientProtocol(t, iprot, oprot)}
 }
 
 func NewUserClient(c thrift.TClient) *UserClient {
-  return &UserClient{
-    c: c,
-  }
+	return &UserClient{
+		TimeoutClient: NewTimeoutClient(c),
+	}
 }
 
-func (p *UserClient) Client_() thrift.TClient {
-  return p.c
-}
 // Parameters:
 //  - Address
 //  - ConnID
 //  - Params
 func (p *UserClient) Login(ctx context.Context, address string, conn_id string, params map[string]string) (err error) {
-  var _args55 UserLoginArgs
-  _args55.Address = address
-  _args55.ConnID = conn_id
-  _args55.Params = params
-  if err := p.Client_().Call(ctx, "login", &_args55, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args68 UserLoginArgs
+	_args68.Address = address
+	_args68.ConnID = conn_id
+	_args68.Params = params
+	if err := p.Client_().Call(ctx, "login", &_args68, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parameters:
@@ -1794,14 +3303,14 @@ func (p *UserClient) Login(ctx context.Context, address string, conn_id string, 
 //  - ConnID
 //  - Context
 func (p *UserClient) Ping(ctx context.Context, address string, conn_id string, context map[string]string) (err error) {
-  var _args56 UserPingArgs
-  _args56.Address = address
-  _args56.ConnID = conn_id
-  _args56.Context = context
-  if err := p.Client_().Call(ctx, "ping", &_args56, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args69 UserPingArgs
+	_args69.Address = address
+	_args69.ConnID = conn_id
+	_args69.Context = context
+	if err := p.Client_().Call(ctx, "ping", &_args69, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parameters:
@@ -1809,14 +3318,14 @@ func (p *UserClient) Ping(ctx context.Context, address string, conn_id string, c
 //  - ConnID
 //  - Context
 func (p *UserClient) Disconnect(ctx context.Context, address string, conn_id string, context map[string]string) (err error) {
-  var _args57 UserDisconnectArgs
-  _args57.Address = address
-  _args57.ConnID = conn_id
-  _args57.Context = context
-  if err := p.Client_().Call(ctx, "disconnect", &_args57, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args70 UserDisconnectArgs
+	_args70.Address = address
+	_args70.ConnID = conn_id
+	_args70.Context = context
+	if err := p.Client_().Call(ctx, "disconnect", &_args70, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parameters:
@@ -1825,15 +3334,15 @@ func (p *UserClient) Disconnect(ctx context.Context, address string, conn_id str
 //  - Context
 //  - Message
 func (p *UserClient) RecvBinary(ctx context.Context, address string, conn_id string, context map[string]string, message []byte) (err error) {
-  var _args58 UserRecvBinaryArgs
-  _args58.Address = address
-  _args58.ConnID = conn_id
-  _args58.Context = context
-  _args58.Message = message
-  if err := p.Client_().Call(ctx, "recv_binary", &_args58, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args71 UserRecvBinaryArgs
+	_args71.Address = address
+	_args71.ConnID = conn_id
+	_args71.Context = context
+	_args71.Message = message
+	if err := p.Client_().Call(ctx, "recv_binary", &_args71, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parameters:
@@ -1842,158 +3351,125 @@ func (p *UserClient) RecvBinary(ctx context.Context, address string, conn_id str
 //  - Context
 //  - Message
 func (p *UserClient) RecvText(ctx context.Context, address string, conn_id string, context map[string]string, message string) (err error) {
-  var _args59 UserRecvTextArgs
-  _args59.Address = address
-  _args59.ConnID = conn_id
-  _args59.Context = context
-  _args59.Message = message
-  if err := p.Client_().Call(ctx, "recv_text", &_args59, nil); err != nil {
-    return err
-  }
-  return nil
+	var _args72 UserRecvTextArgs
+	_args72.Address = address
+	_args72.ConnID = conn_id
+	_args72.Context = context
+	_args72.Message = message
+	if err := p.Client_().Call(ctx, "recv_text", &_args72, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 type UserProcessor struct {
-  processorMap map[string]thrift.TProcessorFunction
-  handler User
-}
-
-func (p *UserProcessor) AddToProcessorMap(key string, processor thrift.TProcessorFunction) {
-  p.processorMap[key] = processor
-}
-
-func (p *UserProcessor) GetProcessorFunction(key string) (processor thrift.TProcessorFunction, ok bool) {
-  processor, ok = p.processorMap[key]
-  return processor, ok
-}
-
-func (p *UserProcessor) ProcessorMap() map[string]thrift.TProcessorFunction {
-  return p.processorMap
+	*TimeoutProcessor
 }
 
 func NewUserProcessor(handler User) *UserProcessor {
-
-  self60 := &UserProcessor{handler:handler, processorMap:make(map[string]thrift.TProcessorFunction)}
-  self60.processorMap["login"] = &userProcessorLogin{handler:handler}
-  self60.processorMap["ping"] = &userProcessorPing{handler:handler}
-  self60.processorMap["disconnect"] = &userProcessorDisconnect{handler:handler}
-  self60.processorMap["recv_binary"] = &userProcessorRecvBinary{handler:handler}
-  self60.processorMap["recv_text"] = &userProcessorRecvText{handler:handler}
-return self60
-}
-
-func (p *UserProcessor) Process(ctx context.Context, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  name, _, seqId, err := iprot.ReadMessageBegin()
-  if err != nil { return false, err }
-  if processor, ok := p.GetProcessorFunction(name); ok {
-    return processor.Process(ctx, seqId, iprot, oprot)
-  }
-  iprot.Skip(thrift.STRUCT)
-  iprot.ReadMessageEnd()
-  x61 := thrift.NewTApplicationException(thrift.UNKNOWN_METHOD, "Unknown function " + name)
-  oprot.WriteMessageBegin(name, thrift.EXCEPTION, seqId)
-  x61.Write(oprot)
-  oprot.WriteMessageEnd()
-  oprot.Flush(ctx)
-  return false, x61
-
+	self73 := &UserProcessor{NewTimeoutProcessor(handler)}
+	self73.AddToProcessorMap("login", &userProcessorLogin{handler: handler})
+	self73.AddToProcessorMap("ping", &userProcessorPing{handler: handler})
+	self73.AddToProcessorMap("disconnect", &userProcessorDisconnect{handler: handler})
+	self73.AddToProcessorMap("recv_binary", &userProcessorRecvBinary{handler: handler})
+	self73.AddToProcessorMap("recv_text", &userProcessorRecvText{handler: handler})
+	return self73
 }
 
 type userProcessorLogin struct {
-  handler User
+	handler User
 }
 
 func (p *userProcessorLogin) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := UserLoginArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := UserLoginArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.Login(ctx, args.Address, args.ConnID, args.Params); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.Login(ctx, args.Address, args.ConnID, args.Params); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type userProcessorPing struct {
-  handler User
+	handler User
 }
 
 func (p *userProcessorPing) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := UserPingArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := UserPingArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.Ping(ctx, args.Address, args.ConnID, args.Context); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.Ping(ctx, args.Address, args.ConnID, args.Context); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type userProcessorDisconnect struct {
-  handler User
+	handler User
 }
 
 func (p *userProcessorDisconnect) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := UserDisconnectArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := UserDisconnectArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.Disconnect(ctx, args.Address, args.ConnID, args.Context); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.Disconnect(ctx, args.Address, args.ConnID, args.Context); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type userProcessorRecvBinary struct {
-  handler User
+	handler User
 }
 
 func (p *userProcessorRecvBinary) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := UserRecvBinaryArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := UserRecvBinaryArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.RecvBinary(ctx, args.Address, args.ConnID, args.Context, args.Message); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.RecvBinary(ctx, args.Address, args.ConnID, args.Context, args.Message); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
 
 type userProcessorRecvText struct {
-  handler User
+	handler User
 }
 
 func (p *userProcessorRecvText) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
-  args := UserRecvTextArgs{}
-  if err = args.Read(iprot); err != nil {
-    iprot.ReadMessageEnd()
-    return false, err
-  }
+	args := UserRecvTextArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		return false, err
+	}
 
-  iprot.ReadMessageEnd()
-  var err2 error
-  if err2 = p.handler.RecvText(ctx, args.Address, args.ConnID, args.Context, args.Message); err2 != nil {
-    return true, err2
-  }
-  return true, nil
+	iprot.ReadMessageEnd()
+	var err2 error
+	if err2 = p.handler.RecvText(ctx, args.Address, args.ConnID, args.Context, args.Message); err2 != nil {
+		return true, err2
+	}
+	return true, nil
 }
-
 
 // HELPER FUNCTIONS AND STRUCTURES
 
@@ -2002,191 +3478,210 @@ func (p *userProcessorRecvText) Process(ctx context.Context, seqId int32, iprot,
 //  - ConnID
 //  - Params
 type UserLoginArgs struct {
-  Address string `thrift:"address,1" db:"address" json:"address"`
-  ConnID string `thrift:"conn_id,2" db:"conn_id" json:"conn_id"`
-  Params map[string]string `thrift:"params,3" db:"params" json:"params"`
+	Address string            `thrift:"address,1" db:"address" json:"address"`
+	ConnID  string            `thrift:"conn_id,2" db:"conn_id" json:"conn_id"`
+	Params  map[string]string `thrift:"params,3" db:"params" json:"params"`
 }
 
 func NewUserLoginArgs() *UserLoginArgs {
-  return &UserLoginArgs{}
+	return &UserLoginArgs{}
 }
 
-
 func (p *UserLoginArgs) GetAddress() string {
-  return p.Address
+	return p.Address
 }
 
 func (p *UserLoginArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 
 func (p *UserLoginArgs) GetParams() map[string]string {
-  return p.Params
+	return p.Params
 }
 func (p *UserLoginArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 3:
-      if fieldTypeId == thrift.MAP {
-        if err := p.ReadField3(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
-}
-
-func (p *UserLoginArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.Address = v
-}
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 3:
+			if fieldTypeId == thrift.MAP {
+				if err := p.ReadField3(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *UserLoginArgs)  ReadField2(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 2: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
+func (p *UserLoginArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.Address = v
+	}
+	return nil
 }
 
-func (p *UserLoginArgs)  ReadField3(iprot thrift.TProtocol) error {
-  _, _, size, err := iprot.ReadMapBegin()
-  if err != nil {
-    return thrift.PrependError("error reading map begin: ", err)
-  }
-  tMap := make(map[string]string, size)
-  p.Params =  tMap
-  for i := 0; i < size; i ++ {
-var _key62 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _key62 = v
+func (p *UserLoginArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
-var _val63 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _val63 = v
-}
-    p.Params[_key62] = _val63
-  }
-  if err := iprot.ReadMapEnd(); err != nil {
-    return thrift.PrependError("error reading map end: ", err)
-  }
-  return nil
+
+func (p *UserLoginArgs) ReadField3(iprot thrift.TProtocol) error {
+	_, _, size, err := iprot.ReadMapBegin()
+	if err != nil {
+		return thrift.PrependError("error reading map begin: ", err)
+	}
+	tMap := make(map[string]string, size)
+	p.Params = tMap
+	for i := 0; i < size; i++ {
+		var _key74 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_key74 = v
+		}
+		var _val75 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_val75 = v
+		}
+		p.Params[_key74] = _val75
+	}
+	if err := iprot.ReadMapEnd(); err != nil {
+		return thrift.PrependError("error reading map end: ", err)
+	}
+	return nil
 }
 
 func (p *UserLoginArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("login_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-    if err := p.writeField3(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("login_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField3(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *UserLoginArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("address", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:address: ", p), err) }
-  if err := oprot.WriteString(string(p.Address)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.address (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:address: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("address", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:address: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Address)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.address (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:address: ", p), err)
+	}
+	return err
 }
 
 func (p *UserLoginArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (2) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *UserLoginArgs) writeField3(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("params", thrift.MAP, 3); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:params: ", p), err) }
-  if err := oprot.WriteMapBegin(thrift.STRING, thrift.STRING, len(p.Params)); err != nil {
-    return thrift.PrependError("error writing map begin: ", err)
-  }
-  for k, v := range p.Params {
-    if err := oprot.WriteString(string(k)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-    if err := oprot.WriteString(string(v)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-  }
-  if err := oprot.WriteMapEnd(); err != nil {
-    return thrift.PrependError("error writing map end: ", err)
-  }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 3:params: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("params", thrift.MAP, 3); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:params: ", p), err)
+	}
+	if err := oprot.WriteMapBegin(thrift.STRING, thrift.STRING, len(p.Params)); err != nil {
+		return thrift.PrependError("error writing map begin: ", err)
+	}
+	for k, v := range p.Params {
+		if err := oprot.WriteString(string(k)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+		if err := oprot.WriteString(string(v)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+	}
+	if err := oprot.WriteMapEnd(); err != nil {
+		return thrift.PrependError("error writing map end: ", err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:params: ", p), err)
+	}
+	return err
 }
 
 func (p *UserLoginArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("UserLoginArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("UserLoginArgs(%+v)", *p)
 }
 
 // Attributes:
@@ -2194,191 +3689,210 @@ func (p *UserLoginArgs) String() string {
 //  - ConnID
 //  - Context
 type UserPingArgs struct {
-  Address string `thrift:"address,1" db:"address" json:"address"`
-  ConnID string `thrift:"conn_id,2" db:"conn_id" json:"conn_id"`
-  Context map[string]string `thrift:"context,3" db:"context" json:"context"`
+	Address string            `thrift:"address,1" db:"address" json:"address"`
+	ConnID  string            `thrift:"conn_id,2" db:"conn_id" json:"conn_id"`
+	Context map[string]string `thrift:"context,3" db:"context" json:"context"`
 }
 
 func NewUserPingArgs() *UserPingArgs {
-  return &UserPingArgs{}
+	return &UserPingArgs{}
 }
 
-
 func (p *UserPingArgs) GetAddress() string {
-  return p.Address
+	return p.Address
 }
 
 func (p *UserPingArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 
 func (p *UserPingArgs) GetContext() map[string]string {
-  return p.Context
+	return p.Context
 }
 func (p *UserPingArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 3:
-      if fieldTypeId == thrift.MAP {
-        if err := p.ReadField3(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
-}
-
-func (p *UserPingArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.Address = v
-}
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 3:
+			if fieldTypeId == thrift.MAP {
+				if err := p.ReadField3(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *UserPingArgs)  ReadField2(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 2: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
+func (p *UserPingArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.Address = v
+	}
+	return nil
 }
 
-func (p *UserPingArgs)  ReadField3(iprot thrift.TProtocol) error {
-  _, _, size, err := iprot.ReadMapBegin()
-  if err != nil {
-    return thrift.PrependError("error reading map begin: ", err)
-  }
-  tMap := make(map[string]string, size)
-  p.Context =  tMap
-  for i := 0; i < size; i ++ {
-var _key64 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _key64 = v
+func (p *UserPingArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
-var _val65 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _val65 = v
-}
-    p.Context[_key64] = _val65
-  }
-  if err := iprot.ReadMapEnd(); err != nil {
-    return thrift.PrependError("error reading map end: ", err)
-  }
-  return nil
+
+func (p *UserPingArgs) ReadField3(iprot thrift.TProtocol) error {
+	_, _, size, err := iprot.ReadMapBegin()
+	if err != nil {
+		return thrift.PrependError("error reading map begin: ", err)
+	}
+	tMap := make(map[string]string, size)
+	p.Context = tMap
+	for i := 0; i < size; i++ {
+		var _key76 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_key76 = v
+		}
+		var _val77 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_val77 = v
+		}
+		p.Context[_key76] = _val77
+	}
+	if err := iprot.ReadMapEnd(); err != nil {
+		return thrift.PrependError("error reading map end: ", err)
+	}
+	return nil
 }
 
 func (p *UserPingArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("ping_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-    if err := p.writeField3(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("ping_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField3(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *UserPingArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("address", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:address: ", p), err) }
-  if err := oprot.WriteString(string(p.Address)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.address (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:address: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("address", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:address: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Address)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.address (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:address: ", p), err)
+	}
+	return err
 }
 
 func (p *UserPingArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (2) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *UserPingArgs) writeField3(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("context", thrift.MAP, 3); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:context: ", p), err) }
-  if err := oprot.WriteMapBegin(thrift.STRING, thrift.STRING, len(p.Context)); err != nil {
-    return thrift.PrependError("error writing map begin: ", err)
-  }
-  for k, v := range p.Context {
-    if err := oprot.WriteString(string(k)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-    if err := oprot.WriteString(string(v)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-  }
-  if err := oprot.WriteMapEnd(); err != nil {
-    return thrift.PrependError("error writing map end: ", err)
-  }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 3:context: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("context", thrift.MAP, 3); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:context: ", p), err)
+	}
+	if err := oprot.WriteMapBegin(thrift.STRING, thrift.STRING, len(p.Context)); err != nil {
+		return thrift.PrependError("error writing map begin: ", err)
+	}
+	for k, v := range p.Context {
+		if err := oprot.WriteString(string(k)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+		if err := oprot.WriteString(string(v)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+	}
+	if err := oprot.WriteMapEnd(); err != nil {
+		return thrift.PrependError("error writing map end: ", err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:context: ", p), err)
+	}
+	return err
 }
 
 func (p *UserPingArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("UserPingArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("UserPingArgs(%+v)", *p)
 }
 
 // Attributes:
@@ -2386,191 +3900,210 @@ func (p *UserPingArgs) String() string {
 //  - ConnID
 //  - Context
 type UserDisconnectArgs struct {
-  Address string `thrift:"address,1" db:"address" json:"address"`
-  ConnID string `thrift:"conn_id,2" db:"conn_id" json:"conn_id"`
-  Context map[string]string `thrift:"context,3" db:"context" json:"context"`
+	Address string            `thrift:"address,1" db:"address" json:"address"`
+	ConnID  string            `thrift:"conn_id,2" db:"conn_id" json:"conn_id"`
+	Context map[string]string `thrift:"context,3" db:"context" json:"context"`
 }
 
 func NewUserDisconnectArgs() *UserDisconnectArgs {
-  return &UserDisconnectArgs{}
+	return &UserDisconnectArgs{}
 }
 
-
 func (p *UserDisconnectArgs) GetAddress() string {
-  return p.Address
+	return p.Address
 }
 
 func (p *UserDisconnectArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 
 func (p *UserDisconnectArgs) GetContext() map[string]string {
-  return p.Context
+	return p.Context
 }
 func (p *UserDisconnectArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 3:
-      if fieldTypeId == thrift.MAP {
-        if err := p.ReadField3(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
-}
-
-func (p *UserDisconnectArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.Address = v
-}
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 3:
+			if fieldTypeId == thrift.MAP {
+				if err := p.ReadField3(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *UserDisconnectArgs)  ReadField2(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 2: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
+func (p *UserDisconnectArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.Address = v
+	}
+	return nil
 }
 
-func (p *UserDisconnectArgs)  ReadField3(iprot thrift.TProtocol) error {
-  _, _, size, err := iprot.ReadMapBegin()
-  if err != nil {
-    return thrift.PrependError("error reading map begin: ", err)
-  }
-  tMap := make(map[string]string, size)
-  p.Context =  tMap
-  for i := 0; i < size; i ++ {
-var _key66 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _key66 = v
+func (p *UserDisconnectArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
-var _val67 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _val67 = v
-}
-    p.Context[_key66] = _val67
-  }
-  if err := iprot.ReadMapEnd(); err != nil {
-    return thrift.PrependError("error reading map end: ", err)
-  }
-  return nil
+
+func (p *UserDisconnectArgs) ReadField3(iprot thrift.TProtocol) error {
+	_, _, size, err := iprot.ReadMapBegin()
+	if err != nil {
+		return thrift.PrependError("error reading map begin: ", err)
+	}
+	tMap := make(map[string]string, size)
+	p.Context = tMap
+	for i := 0; i < size; i++ {
+		var _key78 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_key78 = v
+		}
+		var _val79 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_val79 = v
+		}
+		p.Context[_key78] = _val79
+	}
+	if err := iprot.ReadMapEnd(); err != nil {
+		return thrift.PrependError("error reading map end: ", err)
+	}
+	return nil
 }
 
 func (p *UserDisconnectArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("disconnect_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-    if err := p.writeField3(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("disconnect_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField3(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *UserDisconnectArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("address", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:address: ", p), err) }
-  if err := oprot.WriteString(string(p.Address)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.address (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:address: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("address", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:address: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Address)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.address (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:address: ", p), err)
+	}
+	return err
 }
 
 func (p *UserDisconnectArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (2) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *UserDisconnectArgs) writeField3(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("context", thrift.MAP, 3); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:context: ", p), err) }
-  if err := oprot.WriteMapBegin(thrift.STRING, thrift.STRING, len(p.Context)); err != nil {
-    return thrift.PrependError("error writing map begin: ", err)
-  }
-  for k, v := range p.Context {
-    if err := oprot.WriteString(string(k)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-    if err := oprot.WriteString(string(v)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-  }
-  if err := oprot.WriteMapEnd(); err != nil {
-    return thrift.PrependError("error writing map end: ", err)
-  }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 3:context: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("context", thrift.MAP, 3); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:context: ", p), err)
+	}
+	if err := oprot.WriteMapBegin(thrift.STRING, thrift.STRING, len(p.Context)); err != nil {
+		return thrift.PrependError("error writing map begin: ", err)
+	}
+	for k, v := range p.Context {
+		if err := oprot.WriteString(string(k)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+		if err := oprot.WriteString(string(v)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+	}
+	if err := oprot.WriteMapEnd(); err != nil {
+		return thrift.PrependError("error writing map end: ", err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:context: ", p), err)
+	}
+	return err
 }
 
 func (p *UserDisconnectArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("UserDisconnectArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("UserDisconnectArgs(%+v)", *p)
 }
 
 // Attributes:
@@ -2579,226 +4112,250 @@ func (p *UserDisconnectArgs) String() string {
 //  - Context
 //  - Message
 type UserRecvBinaryArgs struct {
-  Address string `thrift:"address,1" db:"address" json:"address"`
-  ConnID string `thrift:"conn_id,2" db:"conn_id" json:"conn_id"`
-  Context map[string]string `thrift:"context,3" db:"context" json:"context"`
-  Message []byte `thrift:"message,4" db:"message" json:"message"`
+	Address string            `thrift:"address,1" db:"address" json:"address"`
+	ConnID  string            `thrift:"conn_id,2" db:"conn_id" json:"conn_id"`
+	Context map[string]string `thrift:"context,3" db:"context" json:"context"`
+	Message []byte            `thrift:"message,4" db:"message" json:"message"`
 }
 
 func NewUserRecvBinaryArgs() *UserRecvBinaryArgs {
-  return &UserRecvBinaryArgs{}
+	return &UserRecvBinaryArgs{}
 }
 
-
 func (p *UserRecvBinaryArgs) GetAddress() string {
-  return p.Address
+	return p.Address
 }
 
 func (p *UserRecvBinaryArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 
 func (p *UserRecvBinaryArgs) GetContext() map[string]string {
-  return p.Context
+	return p.Context
 }
 
 func (p *UserRecvBinaryArgs) GetMessage() []byte {
-  return p.Message
+	return p.Message
 }
 func (p *UserRecvBinaryArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 3:
-      if fieldTypeId == thrift.MAP {
-        if err := p.ReadField3(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 4:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField4(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
-}
-
-func (p *UserRecvBinaryArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.Address = v
-}
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 3:
+			if fieldTypeId == thrift.MAP {
+				if err := p.ReadField3(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 4:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField4(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *UserRecvBinaryArgs)  ReadField2(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 2: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
-}
-
-func (p *UserRecvBinaryArgs)  ReadField3(iprot thrift.TProtocol) error {
-  _, _, size, err := iprot.ReadMapBegin()
-  if err != nil {
-    return thrift.PrependError("error reading map begin: ", err)
-  }
-  tMap := make(map[string]string, size)
-  p.Context =  tMap
-  for i := 0; i < size; i ++ {
-var _key68 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _key68 = v
-}
-var _val69 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _val69 = v
-}
-    p.Context[_key68] = _val69
-  }
-  if err := iprot.ReadMapEnd(); err != nil {
-    return thrift.PrependError("error reading map end: ", err)
-  }
-  return nil
+func (p *UserRecvBinaryArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.Address = v
+	}
+	return nil
 }
 
-func (p *UserRecvBinaryArgs)  ReadField4(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadBinary(); err != nil {
-  return thrift.PrependError("error reading field 4: ", err)
-} else {
-  p.Message = v
+func (p *UserRecvBinaryArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
-  return nil
+
+func (p *UserRecvBinaryArgs) ReadField3(iprot thrift.TProtocol) error {
+	_, _, size, err := iprot.ReadMapBegin()
+	if err != nil {
+		return thrift.PrependError("error reading map begin: ", err)
+	}
+	tMap := make(map[string]string, size)
+	p.Context = tMap
+	for i := 0; i < size; i++ {
+		var _key80 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_key80 = v
+		}
+		var _val81 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_val81 = v
+		}
+		p.Context[_key80] = _val81
+	}
+	if err := iprot.ReadMapEnd(); err != nil {
+		return thrift.PrependError("error reading map end: ", err)
+	}
+	return nil
+}
+
+func (p *UserRecvBinaryArgs) ReadField4(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadBinary(); err != nil {
+		return thrift.PrependError("error reading field 4: ", err)
+	} else {
+		p.Message = v
+	}
+	return nil
 }
 
 func (p *UserRecvBinaryArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("recv_binary_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-    if err := p.writeField3(oprot); err != nil { return err }
-    if err := p.writeField4(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("recv_binary_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField3(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField4(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *UserRecvBinaryArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("address", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:address: ", p), err) }
-  if err := oprot.WriteString(string(p.Address)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.address (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:address: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("address", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:address: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Address)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.address (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:address: ", p), err)
+	}
+	return err
 }
 
 func (p *UserRecvBinaryArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (2) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *UserRecvBinaryArgs) writeField3(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("context", thrift.MAP, 3); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:context: ", p), err) }
-  if err := oprot.WriteMapBegin(thrift.STRING, thrift.STRING, len(p.Context)); err != nil {
-    return thrift.PrependError("error writing map begin: ", err)
-  }
-  for k, v := range p.Context {
-    if err := oprot.WriteString(string(k)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-    if err := oprot.WriteString(string(v)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-  }
-  if err := oprot.WriteMapEnd(); err != nil {
-    return thrift.PrependError("error writing map end: ", err)
-  }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 3:context: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("context", thrift.MAP, 3); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:context: ", p), err)
+	}
+	if err := oprot.WriteMapBegin(thrift.STRING, thrift.STRING, len(p.Context)); err != nil {
+		return thrift.PrependError("error writing map begin: ", err)
+	}
+	for k, v := range p.Context {
+		if err := oprot.WriteString(string(k)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+		if err := oprot.WriteString(string(v)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+	}
+	if err := oprot.WriteMapEnd(); err != nil {
+		return thrift.PrependError("error writing map end: ", err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:context: ", p), err)
+	}
+	return err
 }
 
 func (p *UserRecvBinaryArgs) writeField4(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("message", thrift.STRING, 4); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 4:message: ", p), err) }
-  if err := oprot.WriteBinary(p.Message); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.message (4) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 4:message: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("message", thrift.STRING, 4); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 4:message: ", p), err)
+	}
+	if err := oprot.WriteBinary(p.Message); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.message (4) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 4:message: ", p), err)
+	}
+	return err
 }
 
 func (p *UserRecvBinaryArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("UserRecvBinaryArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("UserRecvBinaryArgs(%+v)", *p)
 }
 
 // Attributes:
@@ -2807,226 +4364,248 @@ func (p *UserRecvBinaryArgs) String() string {
 //  - Context
 //  - Message
 type UserRecvTextArgs struct {
-  Address string `thrift:"address,1" db:"address" json:"address"`
-  ConnID string `thrift:"conn_id,2" db:"conn_id" json:"conn_id"`
-  Context map[string]string `thrift:"context,3" db:"context" json:"context"`
-  Message string `thrift:"message,4" db:"message" json:"message"`
+	Address string            `thrift:"address,1" db:"address" json:"address"`
+	ConnID  string            `thrift:"conn_id,2" db:"conn_id" json:"conn_id"`
+	Context map[string]string `thrift:"context,3" db:"context" json:"context"`
+	Message string            `thrift:"message,4" db:"message" json:"message"`
 }
 
 func NewUserRecvTextArgs() *UserRecvTextArgs {
-  return &UserRecvTextArgs{}
+	return &UserRecvTextArgs{}
 }
 
-
 func (p *UserRecvTextArgs) GetAddress() string {
-  return p.Address
+	return p.Address
 }
 
 func (p *UserRecvTextArgs) GetConnID() string {
-  return p.ConnID
+	return p.ConnID
 }
 
 func (p *UserRecvTextArgs) GetContext() map[string]string {
-  return p.Context
+	return p.Context
 }
 
 func (p *UserRecvTextArgs) GetMessage() string {
-  return p.Message
+	return p.Message
 }
 func (p *UserRecvTextArgs) Read(iprot thrift.TProtocol) error {
-  if _, err := iprot.ReadStructBegin(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
-  }
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
 
-
-  for {
-    _, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
-    if err != nil {
-      return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
-    }
-    if fieldTypeId == thrift.STOP { break; }
-    switch fieldId {
-    case 1:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField1(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 2:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField2(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 3:
-      if fieldTypeId == thrift.MAP {
-        if err := p.ReadField3(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    case 4:
-      if fieldTypeId == thrift.STRING {
-        if err := p.ReadField4(iprot); err != nil {
-          return err
-        }
-      } else {
-        if err := iprot.Skip(fieldTypeId); err != nil {
-          return err
-        }
-      }
-    default:
-      if err := iprot.Skip(fieldTypeId); err != nil {
-        return err
-      }
-    }
-    if err := iprot.ReadFieldEnd(); err != nil {
-      return err
-    }
-  }
-  if err := iprot.ReadStructEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
-  }
-  return nil
-}
-
-func (p *UserRecvTextArgs)  ReadField1(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 1: ", err)
-} else {
-  p.Address = v
-}
-  return nil
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField1(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 2:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField2(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 3:
+			if fieldTypeId == thrift.MAP {
+				if err := p.ReadField3(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		case 4:
+			if fieldTypeId == thrift.STRING {
+				if err := p.ReadField4(iprot); err != nil {
+					return err
+				}
+			} else {
+				if err := iprot.Skip(fieldTypeId); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
 }
 
-func (p *UserRecvTextArgs)  ReadField2(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 2: ", err)
-} else {
-  p.ConnID = v
-}
-  return nil
-}
-
-func (p *UserRecvTextArgs)  ReadField3(iprot thrift.TProtocol) error {
-  _, _, size, err := iprot.ReadMapBegin()
-  if err != nil {
-    return thrift.PrependError("error reading map begin: ", err)
-  }
-  tMap := make(map[string]string, size)
-  p.Context =  tMap
-  for i := 0; i < size; i ++ {
-var _key70 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _key70 = v
-}
-var _val71 string
-    if v, err := iprot.ReadString(); err != nil {
-    return thrift.PrependError("error reading field 0: ", err)
-} else {
-    _val71 = v
-}
-    p.Context[_key70] = _val71
-  }
-  if err := iprot.ReadMapEnd(); err != nil {
-    return thrift.PrependError("error reading map end: ", err)
-  }
-  return nil
+func (p *UserRecvTextArgs) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		p.Address = v
+	}
+	return nil
 }
 
-func (p *UserRecvTextArgs)  ReadField4(iprot thrift.TProtocol) error {
-  if v, err := iprot.ReadString(); err != nil {
-  return thrift.PrependError("error reading field 4: ", err)
-} else {
-  p.Message = v
+func (p *UserRecvTextArgs) ReadField2(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 2: ", err)
+	} else {
+		p.ConnID = v
+	}
+	return nil
 }
-  return nil
+
+func (p *UserRecvTextArgs) ReadField3(iprot thrift.TProtocol) error {
+	_, _, size, err := iprot.ReadMapBegin()
+	if err != nil {
+		return thrift.PrependError("error reading map begin: ", err)
+	}
+	tMap := make(map[string]string, size)
+	p.Context = tMap
+	for i := 0; i < size; i++ {
+		var _key82 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_key82 = v
+		}
+		var _val83 string
+		if v, err := iprot.ReadString(); err != nil {
+			return thrift.PrependError("error reading field 0: ", err)
+		} else {
+			_val83 = v
+		}
+		p.Context[_key82] = _val83
+	}
+	if err := iprot.ReadMapEnd(); err != nil {
+		return thrift.PrependError("error reading map end: ", err)
+	}
+	return nil
+}
+
+func (p *UserRecvTextArgs) ReadField4(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadString(); err != nil {
+		return thrift.PrependError("error reading field 4: ", err)
+	} else {
+		p.Message = v
+	}
+	return nil
 }
 
 func (p *UserRecvTextArgs) Write(oprot thrift.TProtocol) error {
-  if err := oprot.WriteStructBegin("recv_text_args"); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
-  if p != nil {
-    if err := p.writeField1(oprot); err != nil { return err }
-    if err := p.writeField2(oprot); err != nil { return err }
-    if err := p.writeField3(oprot); err != nil { return err }
-    if err := p.writeField4(oprot); err != nil { return err }
-  }
-  if err := oprot.WriteFieldStop(); err != nil {
-    return thrift.PrependError("write field stop error: ", err) }
-  if err := oprot.WriteStructEnd(); err != nil {
-    return thrift.PrependError("write struct stop error: ", err) }
-  return nil
+	if err := oprot.WriteStructBegin("recv_text_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if p != nil {
+		if err := p.writeField1(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField2(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField3(oprot); err != nil {
+			return err
+		}
+		if err := p.writeField4(oprot); err != nil {
+			return err
+		}
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
 }
 
 func (p *UserRecvTextArgs) writeField1(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("address", thrift.STRING, 1); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:address: ", p), err) }
-  if err := oprot.WriteString(string(p.Address)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.address (1) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 1:address: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("address", thrift.STRING, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:address: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Address)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.address (1) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:address: ", p), err)
+	}
+	return err
 }
 
 func (p *UserRecvTextArgs) writeField2(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 2); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:conn_id: ", p), err) }
-  if err := oprot.WriteString(string(p.ConnID)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.conn_id (2) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 2:conn_id: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("conn_id", thrift.STRING, 2); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:conn_id: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.ConnID)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.conn_id (2) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:conn_id: ", p), err)
+	}
+	return err
 }
 
 func (p *UserRecvTextArgs) writeField3(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("context", thrift.MAP, 3); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:context: ", p), err) }
-  if err := oprot.WriteMapBegin(thrift.STRING, thrift.STRING, len(p.Context)); err != nil {
-    return thrift.PrependError("error writing map begin: ", err)
-  }
-  for k, v := range p.Context {
-    if err := oprot.WriteString(string(k)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-    if err := oprot.WriteString(string(v)); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err) }
-  }
-  if err := oprot.WriteMapEnd(); err != nil {
-    return thrift.PrependError("error writing map end: ", err)
-  }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 3:context: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("context", thrift.MAP, 3); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:context: ", p), err)
+	}
+	if err := oprot.WriteMapBegin(thrift.STRING, thrift.STRING, len(p.Context)); err != nil {
+		return thrift.PrependError("error writing map begin: ", err)
+	}
+	for k, v := range p.Context {
+		if err := oprot.WriteString(string(k)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+		if err := oprot.WriteString(string(v)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+		}
+	}
+	if err := oprot.WriteMapEnd(); err != nil {
+		return thrift.PrependError("error writing map end: ", err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:context: ", p), err)
+	}
+	return err
 }
 
 func (p *UserRecvTextArgs) writeField4(oprot thrift.TProtocol) (err error) {
-  if err := oprot.WriteFieldBegin("message", thrift.STRING, 4); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 4:message: ", p), err) }
-  if err := oprot.WriteString(string(p.Message)); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.message (4) field write error: ", p), err) }
-  if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 4:message: ", p), err) }
-  return err
+	if err := oprot.WriteFieldBegin("message", thrift.STRING, 4); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 4:message: ", p), err)
+	}
+	if err := oprot.WriteString(string(p.Message)); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T.message (4) field write error: ", p), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 4:message: ", p), err)
+	}
+	return err
 }
 
 func (p *UserRecvTextArgs) String() string {
-  if p == nil {
-    return "<nil>"
-  }
-  return fmt.Sprintf("UserRecvTextArgs(%+v)", *p)
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("UserRecvTextArgs(%+v)", *p)
 }
-
-

@@ -106,20 +106,20 @@ func (c *client) Context() map[string]string {
 	return c.ctx
 }
 
-func (c *client) SetContext(context map[string]string) {
+func (c *client) SetContext(key string, value string) {
 	log.Info("set context ", c)
 	c.ctxL.Lock()
 	defer c.ctxL.Unlock()
-	c.ctx = common.MergeMap(c.ctx, context)
+	c.ctx = common.MergeMap(c.ctx, map[string]string{key: value}) // make a copy, DONT modify content
 }
 
-func (c *client) UnsetContext(context []string) {
+func (c *client) UnsetContext(key string, value string) {
 	log.Info("unset context ", c)
 	c.ctxL.Lock()
 	defer c.ctxL.Unlock()
 	m := common.MergeMap(c.ctx, nil) // make a copy, DONT modify content
-	for _, k := range context {
-		delete(m, k)
+	if m[key] == value || value == "" {
+		delete(m, key)
 	}
 	c.ctx = m
 }

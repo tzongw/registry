@@ -28,6 +28,7 @@ func Usage() {
   fmt.Fprintln(os.Stderr, "  void disconnect(string address, string conn_id,  context)")
   fmt.Fprintln(os.Stderr, "  void recv_binary(string address, string conn_id,  context, string message)")
   fmt.Fprintln(os.Stderr, "  void recv_text(string address, string conn_id,  context, string message)")
+  fmt.Fprintln(os.Stderr, "  void timeout(string key, string data)")
   fmt.Fprintln(os.Stderr)
   os.Exit(0)
 }
@@ -158,19 +159,19 @@ func main() {
     value0 := argvalue0
     argvalue1 := flag.Arg(2)
     value1 := argvalue1
-    arg74 := flag.Arg(3)
-    mbTrans75 := thrift.NewTMemoryBufferLen(len(arg74))
-    defer mbTrans75.Close()
-    _, err76 := mbTrans75.WriteString(arg74)
-    if err76 != nil { 
+    arg86 := flag.Arg(3)
+    mbTrans87 := thrift.NewTMemoryBufferLen(len(arg86))
+    defer mbTrans87.Close()
+    _, err88 := mbTrans87.WriteString(arg86)
+    if err88 != nil { 
       Usage()
       return
     }
-    factory77 := thrift.NewTJSONProtocolFactory()
-    jsProt78 := factory77.GetProtocol(mbTrans75)
+    factory89 := thrift.NewTJSONProtocolFactory()
+    jsProt90 := factory89.GetProtocol(mbTrans87)
     containerStruct2 := service.NewUserLoginArgs()
-    err79 := containerStruct2.ReadField3(jsProt78)
-    if err79 != nil {
+    err91 := containerStruct2.ReadField3(jsProt90)
+    if err91 != nil {
       Usage()
       return
     }
@@ -188,19 +189,19 @@ func main() {
     value0 := argvalue0
     argvalue1 := flag.Arg(2)
     value1 := argvalue1
-    arg82 := flag.Arg(3)
-    mbTrans83 := thrift.NewTMemoryBufferLen(len(arg82))
-    defer mbTrans83.Close()
-    _, err84 := mbTrans83.WriteString(arg82)
-    if err84 != nil { 
+    arg94 := flag.Arg(3)
+    mbTrans95 := thrift.NewTMemoryBufferLen(len(arg94))
+    defer mbTrans95.Close()
+    _, err96 := mbTrans95.WriteString(arg94)
+    if err96 != nil { 
       Usage()
       return
     }
-    factory85 := thrift.NewTJSONProtocolFactory()
-    jsProt86 := factory85.GetProtocol(mbTrans83)
+    factory97 := thrift.NewTJSONProtocolFactory()
+    jsProt98 := factory97.GetProtocol(mbTrans95)
     containerStruct2 := service.NewUserPingArgs()
-    err87 := containerStruct2.ReadField3(jsProt86)
-    if err87 != nil {
+    err99 := containerStruct2.ReadField3(jsProt98)
+    if err99 != nil {
       Usage()
       return
     }
@@ -218,19 +219,19 @@ func main() {
     value0 := argvalue0
     argvalue1 := flag.Arg(2)
     value1 := argvalue1
-    arg90 := flag.Arg(3)
-    mbTrans91 := thrift.NewTMemoryBufferLen(len(arg90))
-    defer mbTrans91.Close()
-    _, err92 := mbTrans91.WriteString(arg90)
-    if err92 != nil { 
+    arg102 := flag.Arg(3)
+    mbTrans103 := thrift.NewTMemoryBufferLen(len(arg102))
+    defer mbTrans103.Close()
+    _, err104 := mbTrans103.WriteString(arg102)
+    if err104 != nil { 
       Usage()
       return
     }
-    factory93 := thrift.NewTJSONProtocolFactory()
-    jsProt94 := factory93.GetProtocol(mbTrans91)
+    factory105 := thrift.NewTJSONProtocolFactory()
+    jsProt106 := factory105.GetProtocol(mbTrans103)
     containerStruct2 := service.NewUserDisconnectArgs()
-    err95 := containerStruct2.ReadField3(jsProt94)
-    if err95 != nil {
+    err107 := containerStruct2.ReadField3(jsProt106)
+    if err107 != nil {
       Usage()
       return
     }
@@ -248,19 +249,19 @@ func main() {
     value0 := argvalue0
     argvalue1 := flag.Arg(2)
     value1 := argvalue1
-    arg98 := flag.Arg(3)
-    mbTrans99 := thrift.NewTMemoryBufferLen(len(arg98))
-    defer mbTrans99.Close()
-    _, err100 := mbTrans99.WriteString(arg98)
-    if err100 != nil { 
+    arg110 := flag.Arg(3)
+    mbTrans111 := thrift.NewTMemoryBufferLen(len(arg110))
+    defer mbTrans111.Close()
+    _, err112 := mbTrans111.WriteString(arg110)
+    if err112 != nil { 
       Usage()
       return
     }
-    factory101 := thrift.NewTJSONProtocolFactory()
-    jsProt102 := factory101.GetProtocol(mbTrans99)
+    factory113 := thrift.NewTJSONProtocolFactory()
+    jsProt114 := factory113.GetProtocol(mbTrans111)
     containerStruct2 := service.NewUserRecvBinaryArgs()
-    err103 := containerStruct2.ReadField3(jsProt102)
-    if err103 != nil {
+    err115 := containerStruct2.ReadField3(jsProt114)
+    if err115 != nil {
       Usage()
       return
     }
@@ -280,19 +281,19 @@ func main() {
     value0 := argvalue0
     argvalue1 := flag.Arg(2)
     value1 := argvalue1
-    arg107 := flag.Arg(3)
-    mbTrans108 := thrift.NewTMemoryBufferLen(len(arg107))
-    defer mbTrans108.Close()
-    _, err109 := mbTrans108.WriteString(arg107)
-    if err109 != nil { 
+    arg119 := flag.Arg(3)
+    mbTrans120 := thrift.NewTMemoryBufferLen(len(arg119))
+    defer mbTrans120.Close()
+    _, err121 := mbTrans120.WriteString(arg119)
+    if err121 != nil { 
       Usage()
       return
     }
-    factory110 := thrift.NewTJSONProtocolFactory()
-    jsProt111 := factory110.GetProtocol(mbTrans108)
+    factory122 := thrift.NewTJSONProtocolFactory()
+    jsProt123 := factory122.GetProtocol(mbTrans120)
     containerStruct2 := service.NewUserRecvTextArgs()
-    err112 := containerStruct2.ReadField3(jsProt111)
-    if err112 != nil {
+    err124 := containerStruct2.ReadField3(jsProt123)
+    if err124 != nil {
       Usage()
       return
     }
@@ -301,6 +302,18 @@ func main() {
     argvalue3 := flag.Arg(4)
     value3 := argvalue3
     fmt.Print(client.RecvText(context.Background(), value0, value1, value2, value3))
+    fmt.Print("\n")
+    break
+  case "timeout":
+    if flag.NArg() - 1 != 2 {
+      fmt.Fprintln(os.Stderr, "Timeout requires 2 args")
+      flag.Usage()
+    }
+    argvalue0 := flag.Arg(1)
+    value0 := argvalue0
+    argvalue1 := flag.Arg(2)
+    value1 := argvalue1
+    fmt.Print(client.Timeout(context.Background(), value0, value1))
     fmt.Print("\n")
     break
   case "":

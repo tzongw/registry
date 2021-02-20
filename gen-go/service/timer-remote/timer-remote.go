@@ -23,15 +23,9 @@ func Usage() {
   fmt.Fprintln(os.Stderr, "Usage of ", os.Args[0], " [-h host:port] [-u url] [-f[ramed]] function [arg1 [arg2...]]:")
   flag.PrintDefaults()
   fmt.Fprintln(os.Stderr, "\nFunctions:")
-  fmt.Fprintln(os.Stderr, "  void set_context(string conn_id, string key, string value)")
-  fmt.Fprintln(os.Stderr, "  void unset_context(string conn_id, string key, string value)")
-  fmt.Fprintln(os.Stderr, "  void remove_conn(string conn_id)")
-  fmt.Fprintln(os.Stderr, "  void send_text(string conn_id, string message)")
-  fmt.Fprintln(os.Stderr, "  void send_binary(string conn_id, string message)")
-  fmt.Fprintln(os.Stderr, "  void join_group(string conn_id, string group)")
-  fmt.Fprintln(os.Stderr, "  void leave_group(string conn_id, string group)")
-  fmt.Fprintln(os.Stderr, "  void broadcast_binary(string group,  exclude, string message)")
-  fmt.Fprintln(os.Stderr, "  void broadcast_text(string group,  exclude, string message)")
+  fmt.Fprintln(os.Stderr, "  void call_later(string key, string service_name, string data, double delay)")
+  fmt.Fprintln(os.Stderr, "  void call_repeat(string key, string service_name, string data, double interval)")
+  fmt.Fprintln(os.Stderr, "  void remove_timer(string key, string service_name)")
   fmt.Fprintln(os.Stderr)
   os.Exit(0)
 }
@@ -146,16 +140,16 @@ func main() {
   }
   iprot := protocolFactory.GetProtocol(trans)
   oprot := protocolFactory.GetProtocol(trans)
-  client := service.NewGateClient(thrift.NewTStandardClient(iprot, oprot))
+  client := service.NewTimerClient(thrift.NewTStandardClient(iprot, oprot))
   if err := trans.Open(); err != nil {
     fmt.Fprintln(os.Stderr, "Error opening socket to ", host, ":", port, " ", err)
     os.Exit(1)
   }
   
   switch cmd {
-  case "set_context":
-    if flag.NArg() - 1 != 3 {
-      fmt.Fprintln(os.Stderr, "SetContext requires 3 args")
+  case "call_later":
+    if flag.NArg() - 1 != 4 {
+      fmt.Fprintln(os.Stderr, "CallLater requires 4 args")
       flag.Usage()
     }
     argvalue0 := flag.Arg(1)
@@ -164,12 +158,18 @@ func main() {
     value1 := argvalue1
     argvalue2 := flag.Arg(3)
     value2 := argvalue2
-    fmt.Print(client.SetContext(context.Background(), value0, value1, value2))
+    argvalue3, err11 := (strconv.ParseFloat(flag.Arg(4), 64))
+    if err11 != nil {
+      Usage()
+      return
+    }
+    value3 := argvalue3
+    fmt.Print(client.CallLater(context.Background(), value0, value1, value2, value3))
     fmt.Print("\n")
     break
-  case "unset_context":
-    if flag.NArg() - 1 != 3 {
-      fmt.Fprintln(os.Stderr, "UnsetContext requires 3 args")
+  case "call_repeat":
+    if flag.NArg() - 1 != 4 {
+      fmt.Fprintln(os.Stderr, "CallRepeat requires 4 args")
       flag.Usage()
     }
     argvalue0 := flag.Arg(1)
@@ -178,125 +178,25 @@ func main() {
     value1 := argvalue1
     argvalue2 := flag.Arg(3)
     value2 := argvalue2
-    fmt.Print(client.UnsetContext(context.Background(), value0, value1, value2))
-    fmt.Print("\n")
-    break
-  case "remove_conn":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "RemoveConn requires 1 args")
-      flag.Usage()
+    argvalue3, err15 := (strconv.ParseFloat(flag.Arg(4), 64))
+    if err15 != nil {
+      Usage()
+      return
     }
-    argvalue0 := flag.Arg(1)
-    value0 := argvalue0
-    fmt.Print(client.RemoveConn(context.Background(), value0))
+    value3 := argvalue3
+    fmt.Print(client.CallRepeat(context.Background(), value0, value1, value2, value3))
     fmt.Print("\n")
     break
-  case "send_text":
+  case "remove_timer":
     if flag.NArg() - 1 != 2 {
-      fmt.Fprintln(os.Stderr, "SendText requires 2 args")
+      fmt.Fprintln(os.Stderr, "RemoveTimer requires 2 args")
       flag.Usage()
     }
     argvalue0 := flag.Arg(1)
     value0 := argvalue0
     argvalue1 := flag.Arg(2)
     value1 := argvalue1
-    fmt.Print(client.SendText(context.Background(), value0, value1))
-    fmt.Print("\n")
-    break
-  case "send_binary":
-    if flag.NArg() - 1 != 2 {
-      fmt.Fprintln(os.Stderr, "SendBinary requires 2 args")
-      flag.Usage()
-    }
-    argvalue0 := flag.Arg(1)
-    value0 := argvalue0
-    argvalue1 := []byte(flag.Arg(2))
-    value1 := argvalue1
-    fmt.Print(client.SendBinary(context.Background(), value0, value1))
-    fmt.Print("\n")
-    break
-  case "join_group":
-    if flag.NArg() - 1 != 2 {
-      fmt.Fprintln(os.Stderr, "JoinGroup requires 2 args")
-      flag.Usage()
-    }
-    argvalue0 := flag.Arg(1)
-    value0 := argvalue0
-    argvalue1 := flag.Arg(2)
-    value1 := argvalue1
-    fmt.Print(client.JoinGroup(context.Background(), value0, value1))
-    fmt.Print("\n")
-    break
-  case "leave_group":
-    if flag.NArg() - 1 != 2 {
-      fmt.Fprintln(os.Stderr, "LeaveGroup requires 2 args")
-      flag.Usage()
-    }
-    argvalue0 := flag.Arg(1)
-    value0 := argvalue0
-    argvalue1 := flag.Arg(2)
-    value1 := argvalue1
-    fmt.Print(client.LeaveGroup(context.Background(), value0, value1))
-    fmt.Print("\n")
-    break
-  case "broadcast_binary":
-    if flag.NArg() - 1 != 3 {
-      fmt.Fprintln(os.Stderr, "BroadcastBinary requires 3 args")
-      flag.Usage()
-    }
-    argvalue0 := flag.Arg(1)
-    value0 := argvalue0
-    arg53 := flag.Arg(2)
-    mbTrans54 := thrift.NewTMemoryBufferLen(len(arg53))
-    defer mbTrans54.Close()
-    _, err55 := mbTrans54.WriteString(arg53)
-    if err55 != nil { 
-      Usage()
-      return
-    }
-    factory56 := thrift.NewTJSONProtocolFactory()
-    jsProt57 := factory56.GetProtocol(mbTrans54)
-    containerStruct1 := service.NewGateBroadcastBinaryArgs()
-    err58 := containerStruct1.ReadField2(jsProt57)
-    if err58 != nil {
-      Usage()
-      return
-    }
-    argvalue1 := containerStruct1.Exclude
-    value1 := argvalue1
-    argvalue2 := []byte(flag.Arg(3))
-    value2 := argvalue2
-    fmt.Print(client.BroadcastBinary(context.Background(), value0, value1, value2))
-    fmt.Print("\n")
-    break
-  case "broadcast_text":
-    if flag.NArg() - 1 != 3 {
-      fmt.Fprintln(os.Stderr, "BroadcastText requires 3 args")
-      flag.Usage()
-    }
-    argvalue0 := flag.Arg(1)
-    value0 := argvalue0
-    arg61 := flag.Arg(2)
-    mbTrans62 := thrift.NewTMemoryBufferLen(len(arg61))
-    defer mbTrans62.Close()
-    _, err63 := mbTrans62.WriteString(arg61)
-    if err63 != nil { 
-      Usage()
-      return
-    }
-    factory64 := thrift.NewTJSONProtocolFactory()
-    jsProt65 := factory64.GetProtocol(mbTrans62)
-    containerStruct1 := service.NewGateBroadcastTextArgs()
-    err66 := containerStruct1.ReadField2(jsProt65)
-    if err66 != nil {
-      Usage()
-      return
-    }
-    argvalue1 := containerStruct1.Exclude
-    value1 := argvalue1
-    argvalue2 := flag.Arg(3)
-    value2 := argvalue2
-    fmt.Print(client.BroadcastText(context.Background(), value0, value1, value2))
+    fmt.Print(client.RemoveTimer(context.Background(), value0, value1))
     fmt.Print("\n")
     break
   case "":

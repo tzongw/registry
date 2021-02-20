@@ -13,21 +13,21 @@ var rpcAddr string
 type gateHandler struct {
 }
 
-func (g *gateHandler) SetContext(ctx context.Context, connId string, context map[string]string) (err error) {
+func (g *gateHandler) SetContext(ctx context.Context, connId string, key string, value string) (err error) {
 	c, err := findClient(connId)
 	if err != nil {
 		return
 	}
-	c.SetContext(context)
+	c.SetContext(key, value)
 	return
 }
 
-func (g *gateHandler) UnsetContext(ctx context.Context, connId string, context []string) (err error) {
+func (g *gateHandler) UnsetContext(ctx context.Context, connId string, key string, value string) (err error) {
 	c, err := findClient(connId)
 	if err != nil {
 		return
 	}
-	c.UnsetContext(context)
+	c.UnsetContext(key, value)
 	return
 }
 
