@@ -107,14 +107,14 @@ func (c *client) Context() map[string]string {
 }
 
 func (c *client) SetContext(key string, value string) {
-	log.Info("set context ", c)
+	log.Infof("%+v: %+v %+v", c, key, value)
 	c.ctxL.Lock()
 	defer c.ctxL.Unlock()
 	c.ctx = common.MergeMap(c.ctx, map[string]string{key: value}) // make a copy, DONT modify content
 }
 
 func (c *client) UnsetContext(key string, value string) {
-	log.Info("unset context ", c)
+	log.Info("%+v: %+v %+v", c, key, value)
 	c.ctxL.Lock()
 	defer c.ctxL.Unlock()
 	m := common.MergeMap(c.ctx, nil) // make a copy, DONT modify content
