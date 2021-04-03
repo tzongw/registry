@@ -16,7 +16,7 @@ import (
 const (
 	Prefix          = "service"
 	RefreshInterval = 3 * time.Second
-	TTL             = MissTimes * RefreshInterval
+	TTL             = 3 * RefreshInterval
 	CoolDown        = TTL + RefreshInterval
 )
 

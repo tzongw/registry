@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	readWait         = common.MissTimes * common.PingInterval
+	readWait         = 3 * common.PingInterval
 	writeWait        = time.Second
 	maxMessageSize   = 100 * 1024
 	writeChannelSize = 128
@@ -58,14 +58,14 @@ func newClient(id string, conn *websocket.Conn) *client {
 }
 
 func (c *client) String() string {
-	return fmt.Sprintf("%+v %+v", c.id, c.Context())
+	return fmt.Sprintf("%+v %+v", c.id, c.context())
 }
 
 func (c *client) Serve() {
 	log.Info("serve start ", c)
 	defer func() {
 		log.Info("serve stop ", c)
-		shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.id, c.Context())
+		shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.id, c.context())
 		c.Stop()
 	}()
 	go c.ping()
@@ -85,9 +85,9 @@ func (c *client) Serve() {
 		}
 		switch mType {
 		case websocket.BinaryMessage:
-			shared.UserClient.RecvBinary(common.RandomCtx, rpcAddr, c.id, c.Context(), message)
+			shared.UserClient.RecvBinary(common.RandomCtx, rpcAddr, c.id, c.context(), message)
 		case websocket.TextMessage:
-			shared.UserClient.RecvText(common.RandomCtx, rpcAddr, c.id, c.Context(), string(message))
+			shared.UserClient.RecvText(common.RandomCtx, rpcAddr, c.id, c.context(), string(message))
 		default:
 			log.Errorf("unknown message %+v, %+v", mType, message)
 		}
@@ -100,7 +100,7 @@ func (c *client) Stop() {
 	}
 }
 
-func (c *client) Context() map[string]string {
+func (c *client) context() map[string]string {
 	c.ctxL.Lock()
 	defer c.ctxL.Unlock()
 	return c.ctx
@@ -159,7 +159,7 @@ func (c *client) ping() {
 			return
 		}
 		c.sendMessage(pingMessage)
-		shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.id, c.Context())
+		shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.id, c.context())
 	}
 }
 
