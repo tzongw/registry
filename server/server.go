@@ -22,50 +22,50 @@ const (
 var clients sync.Map
 var clientCount int64
 
-var ErrNotExist = errors.New("not exist")
+var errNotExist = errors.New("not exist")
 
 func findClient(connId string) (*client, error) {
 	v, ok := clients.Load(connId)
 	if !ok {
-		return nil, ErrNotExist
+		return nil, errNotExist
 	}
 	return v.(*client), nil
 }
 
 type message struct {
-	Type    int
-	Content []byte
+	typ     int
+	content []byte
 }
 
-var pingMessage = &message{Type: websocket.PingMessage}
+var pingMessage = &message{typ: websocket.PingMessage}
 
 type client struct {
-	Id      string
+	id      string
 	conn    *websocket.Conn
 	writeC  chan *message
 	stopped int32
 	ctx     map[string]string
 	ctxL    sync.Mutex
-	Groups  map[string]struct{} // protected by GLOBAL groupsMutex
+	groups  map[string]struct{} // protected by GLOBAL groupsMutex
 }
 
 func newClient(id string, conn *websocket.Conn) *client {
 	return &client{
-		Id:     id,
+		id:     id,
 		conn:   conn,
 		writeC: make(chan *message, writeChannelSize),
 	}
 }
 
 func (c *client) String() string {
-	return fmt.Sprintf("%+v %+v", c.Id, c.Context())
+	return fmt.Sprintf("%+v %+v", c.id, c.Context())
 }
 
 func (c *client) Serve() {
 	log.Info("serve start ", c)
 	defer func() {
 		log.Info("serve stop ", c)
-		shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.Id, c.Context())
+		shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.id, c.Context())
 		c.Stop()
 	}()
 	go c.ping()
@@ -85,9 +85,9 @@ func (c *client) Serve() {
 		}
 		switch mType {
 		case websocket.BinaryMessage:
-			shared.UserClient.RecvBinary(common.RandomCtx, rpcAddr, c.Id, c.Context(), message)
+			shared.UserClient.RecvBinary(common.RandomCtx, rpcAddr, c.id, c.Context(), message)
 		case websocket.TextMessage:
-			shared.UserClient.RecvText(common.RandomCtx, rpcAddr, c.Id, c.Context(), string(message))
+			shared.UserClient.RecvText(common.RandomCtx, rpcAddr, c.id, c.Context(), string(message))
 		default:
 			log.Errorf("unknown message %+v, %+v", mType, message)
 		}
@@ -125,11 +125,11 @@ func (c *client) UnsetContext(key string, value string) {
 }
 
 func (c *client) SendText(content string) {
-	c.sendMessage(&message{Type: websocket.TextMessage, Content: []byte(content)})
+	c.sendMessage(&message{typ: websocket.TextMessage, content: []byte(content)})
 }
 
 func (c *client) SendBinary(content []byte) {
-	c.sendMessage(&message{Type: websocket.BinaryMessage, Content: content})
+	c.sendMessage(&message{typ: websocket.BinaryMessage, content: content})
 }
 
 func (c *client) sendMessage(msg *message) {
@@ -159,7 +159,7 @@ func (c *client) ping() {
 			return
 		}
 		c.sendMessage(pingMessage)
-		shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.Id, c.Context())
+		shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.id, c.Context())
 	}
 }
 
@@ -169,7 +169,7 @@ func (c *client) write() {
 	defer c.conn.Close()
 	for m := range c.writeC {
 		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-		if err := c.conn.WriteMessage(m.Type, m.Content); err != nil {
+		if err := c.conn.WriteMessage(m.typ, m.content); err != nil {
 			log.Infof("write error %+v %+v", err, c)
 			return
 		}
@@ -194,13 +194,13 @@ func joinGroup(connId, group string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := c.Groups[group]; ok {
+	if _, ok := c.groups[group]; ok {
 		return ErrAlreadyInGroup // maybe join multi times
 	}
-	if c.Groups == nil {
-		c.Groups = make(map[string]struct{})
+	if c.groups == nil {
+		c.groups = make(map[string]struct{})
 	}
-	c.Groups[group] = struct{}{}
+	c.groups[group] = struct{}{}
 	g, ok := groups[group]
 	if !ok {
 		g = &groupInfo{}
@@ -219,10 +219,10 @@ func leaveGroup(connId, group string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := c.Groups[group]; !ok {
+	if _, ok := c.groups[group]; !ok {
 		return ErrNotInGroup // maybe leave multi times
 	}
-	delete(c.Groups, group)
+	delete(c.groups, group)
 	removeFromGroup(c, group)
 	return nil
 }
@@ -239,11 +239,11 @@ func removeFromGroup(c *client, group string) {
 }
 
 func broadcastText(group string, exclude []string, content string) {
-	broadcastMessage(group, exclude, &message{Type: websocket.TextMessage, Content: []byte(content)})
+	broadcastMessage(group, exclude, &message{typ: websocket.TextMessage, content: []byte(content)})
 }
 
 func broadcastBinary(group string, exclude []string, content []byte) {
-	broadcastMessage(group, exclude, &message{Type: websocket.BinaryMessage, Content: content})
+	broadcastMessage(group, exclude, &message{typ: websocket.BinaryMessage, content: content})
 }
 
 func broadcastMessage(group string, exclude []string, msg *message) {
@@ -257,7 +257,7 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 	go g.clients.Range(func(key, _ interface{}) bool {
 		c := key.(*client)
 		index := common.FindIndex(len(exclude), func(i int) bool {
-			return c.Id == exclude[i]
+			return c.id == exclude[i]
 		})
 		if index < 0 {
 			c.sendMessage(msg)
@@ -269,8 +269,8 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 func cleanClient(c *client) {
 	groupsMutex.Lock()
 	defer groupsMutex.Unlock()
-	clients.Delete(c.Id) // join & leave no-op after this
-	for group := range c.Groups {
+	clients.Delete(c.id) // join & leave no-op after this
+	for group := range c.groups {
 		removeFromGroup(c, group)
 	}
 }
