@@ -71,5 +71,6 @@ func WsServe(addr string) string {
 			log.Fatal(err)
 		}
 	}()
+	go pinger()
 	return net.JoinHostPort(host, port)
 }

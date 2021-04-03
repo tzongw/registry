@@ -68,7 +68,7 @@ func (c *client) Serve() {
 		shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.id, c.context())
 		c.Stop()
 	}()
-	go c.ping()
+	addPing(c)
 	go c.write()
 	c.conn.SetReadLimit(maxMessageSize)
 	h := c.conn.PongHandler()
@@ -150,17 +150,14 @@ func (c *client) sendMessage(msg *message) {
 	}
 }
 
-func (c *client) ping() {
-	log.Debug("ping start ", c)
-	defer log.Debug("ping stop ", c)
-	for {
-		time.Sleep(common.PingInterval)
-		if atomic.LoadInt32(&c.stopped) == 1 {
-			return
-		}
-		c.sendMessage(pingMessage)
-		shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.id, c.context())
+func (c *client) Ping() bool {
+	if atomic.LoadInt32(&c.stopped) == 1 {
+		log.Debug("ping stop ", c)
+		return false
 	}
+	c.sendMessage(pingMessage)
+	shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.id, c.context())
+	return true
 }
 
 func (c *client) write() {
