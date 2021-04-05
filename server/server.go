@@ -63,17 +63,19 @@ func (c *client) String() string {
 
 func (c *client) Serve() {
 	log.Info("serve start ", c)
+	timer := time.AfterFunc(common.PingInterval, c.ping)
 	defer func() {
 		log.Info("serve stop ", c)
+		timer.Stop()
 		shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.id, c.context())
 		c.Stop()
 	}()
-	addPing(c)
 	go c.write()
 	c.conn.SetReadLimit(maxMessageSize)
 	h := c.conn.PongHandler()
 	c.conn.SetPongHandler(func(appData string) error {
 		c.conn.SetReadDeadline(time.Now().Add(readWait))
+		timer = time.AfterFunc(common.PingInterval, c.ping)
 		return h(appData)
 	})
 	for {
@@ -150,14 +152,9 @@ func (c *client) sendMessage(msg *message) {
 	}
 }
 
-func (c *client) Ping() bool {
-	if atomic.LoadInt32(&c.stopped) == 1 {
-		log.Debug("ping stop ", c)
-		return false
-	}
+func (c *client) ping() {
 	c.sendMessage(pingMessage)
 	shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.id, c.context())
-	return true
 }
 
 func (c *client) write() {
