@@ -55,7 +55,7 @@ func (p *Pool) Close() {
 	for {
 		select {
 		case i := <-p.idleC:
-			p.factory.Close(i)
+			_ = p.factory.Close(i)
 		default:
 			return
 		}
@@ -107,7 +107,7 @@ func (p *Pool) Put(i interface{}, err error) {
 	p.m.Lock()
 	defer p.m.Unlock()
 	if err != nil || p.closed {
-		p.factory.Close(i)
+		_ = p.factory.Close(i)
 		p.size -= 1
 		return
 	}

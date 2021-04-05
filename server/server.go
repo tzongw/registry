@@ -67,19 +67,19 @@ func (c *client) Serve() {
 	defer func() {
 		log.Info("serve stop ", c)
 		timer.Stop()
-		shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.id, c.context())
 		c.Stop()
+		_ = shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.id, c.context())
 	}()
 	go c.write()
 	c.conn.SetReadLimit(maxMessageSize)
 	h := c.conn.PongHandler()
 	c.conn.SetPongHandler(func(appData string) error {
-		c.conn.SetReadDeadline(time.Now().Add(readWait))
+		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
 		timer = time.AfterFunc(common.PingInterval, c.ping)
 		return h(appData)
 	})
 	for {
-		c.conn.SetReadDeadline(time.Now().Add(readWait))
+		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
 		mType, message, err := c.conn.ReadMessage()
 		if err != nil {
 			log.Info(err)
@@ -87,9 +87,9 @@ func (c *client) Serve() {
 		}
 		switch mType {
 		case websocket.BinaryMessage:
-			shared.UserClient.RecvBinary(common.RandomCtx, rpcAddr, c.id, c.context(), message)
+			_ = shared.UserClient.RecvBinary(common.RandomCtx, rpcAddr, c.id, c.context(), message)
 		case websocket.TextMessage:
-			shared.UserClient.RecvText(common.RandomCtx, rpcAddr, c.id, c.context(), string(message))
+			_ = shared.UserClient.RecvText(common.RandomCtx, rpcAddr, c.id, c.context(), string(message))
 		default:
 			log.Errorf("unknown message %+v, %+v", mType, message)
 		}
@@ -154,15 +154,17 @@ func (c *client) sendMessage(msg *message) {
 
 func (c *client) ping() {
 	c.sendMessage(pingMessage)
-	shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.id, c.context())
+	_ = shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.id, c.context())
 }
 
 func (c *client) write() {
 	log.Debug("write start ", c)
-	defer log.Debug("write stop ", c)
-	defer c.conn.Close()
+	defer func() {
+		log.Debug("write stop ", c)
+		_ = c.conn.Close()
+	}()
 	for m := range c.writeC {
-		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+		_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 		if err := c.conn.WriteMessage(m.typ, m.content); err != nil {
 			log.Infof("write error %+v %+v", err, c)
 			return

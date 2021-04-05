@@ -20,16 +20,16 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		log.Error(err)
 		return
 	}
-	defer conn.Close()
 	connId := uuid.New().String()
 	client := newClient(connId, conn)
 	clients.Store(connId, client)
 	count := atomic.AddInt64(&clientCount, 1)
-	log.Info("++ client count ", count)
+	log.Debug("++ client count ", count)
 	defer func() {
+		_ = conn.Close()
 		cleanClient(client)
 		count := atomic.AddInt64(&clientCount, -1)
-		log.Info("-- client count ", count)
+		log.Debug("-- client count ", count)
 	}()
 	params := make(map[string]string)
 	for k := range r.Header {
