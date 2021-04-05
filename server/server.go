@@ -181,8 +181,8 @@ type groupInfo struct {
 var groups = make(map[string]*groupInfo)
 var groupsMutex sync.Mutex
 
-var ErrAlreadyInGroup = errors.New("already in group")
-var ErrNotInGroup = errors.New("not in group")
+var errAlreadyInGroup = errors.New("already in group")
+var errNotInGroup = errors.New("not in group")
 
 func joinGroup(connId, group string) error {
 	groupsMutex.Lock()
@@ -192,7 +192,7 @@ func joinGroup(connId, group string) error {
 		return err
 	}
 	if _, ok := c.groups[group]; ok {
-		return ErrAlreadyInGroup // maybe join multi times
+		return errAlreadyInGroup // maybe join multi times
 	}
 	if c.groups == nil {
 		c.groups = make(map[string]struct{})
@@ -217,7 +217,7 @@ func leaveGroup(connId, group string) error {
 		return err
 	}
 	if _, ok := c.groups[group]; !ok {
-		return ErrNotInGroup // maybe leave multi times
+		return errNotInGroup // maybe leave multi times
 	}
 	delete(c.groups, group)
 	removeFromGroup(c, group)

@@ -23,7 +23,6 @@ func addPing(client *client) {
 func pinger() {
 	for {
 		mutex.Lock()
-		duration := common.PingInterval
 		now := time.Now()
 		for len(schedules) > 0 && schedules[0].deadline.Before(now) {
 			go func(client *client) {
@@ -34,6 +33,7 @@ func pinger() {
 			schedules[0].client = nil // gc
 			schedules = schedules[1:]
 		}
+		duration := common.PingInterval
 		if len(schedules) > 0 {
 			duration = schedules[0].deadline.Sub(now)
 		}
