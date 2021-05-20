@@ -75,7 +75,7 @@ func (c *client) Serve() {
 	h := c.conn.PongHandler()
 	c.conn.SetPongHandler(func(appData string) error {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
-		timer = time.AfterFunc(common.PingInterval, c.ping)
+		timer.Reset(common.PingInterval)
 		return h(appData)
 	})
 	for {
