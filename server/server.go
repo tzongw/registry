@@ -8,15 +8,14 @@ import (
 	"github.com/tzongw/registry/common"
 	"github.com/tzongw/registry/shared"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
 const (
-	readWait         = 3 * common.PingInterval
-	writeWait        = time.Second
-	maxMessageSize   = 100 * 1024
-	writeChannelSize = 128
+	readWait       = 3 * common.PingInterval
+	writeWait      = time.Second
+	maxMessageSize = 100 * 1024
+	idleWait       = 5 * time.Second
 )
 
 var clients sync.Map
@@ -42,18 +41,20 @@ var pingMessage = &message{typ: websocket.PingMessage}
 type client struct {
 	id      string
 	conn    *websocket.Conn
-	writeC  chan *message
-	stopped int32
 	ctx     map[string]string
-	ctxL    sync.Mutex
+	mu      sync.Mutex
+	stopped bool
+	ch      chan *message
+	backlog []*message
+	writing bool                // write goroutine is running
 	groups  map[string]struct{} // protected by GLOBAL groupsMutex
 }
 
 func newClient(id string, conn *websocket.Conn) *client {
 	return &client{
-		id:     id,
-		conn:   conn,
-		writeC: make(chan *message, writeChannelSize),
+		id:   id,
+		conn: conn,
+		ch:   make(chan *message, 1),
 	}
 }
 
@@ -70,7 +71,6 @@ func (c *client) Serve() {
 		c.Stop()
 		_ = shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.id, c.context())
 	}()
-	go c.write()
 	c.conn.SetReadLimit(maxMessageSize)
 	h := c.conn.PongHandler()
 	c.conn.SetPongHandler(func(appData string) error {
@@ -97,28 +97,31 @@ func (c *client) Serve() {
 }
 
 func (c *client) Stop() {
-	if atomic.CompareAndSwapInt32(&c.stopped, 0, 1) {
-		close(c.writeC)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.stopped {
+		c.stopped = true
+		close(c.ch)
 	}
 }
 
 func (c *client) context() map[string]string {
-	c.ctxL.Lock()
-	defer c.ctxL.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.ctx
 }
 
 func (c *client) SetContext(key string, value string) {
 	log.Infof("%+v: %+v %+v", c, key, value)
-	c.ctxL.Lock()
-	defer c.ctxL.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.ctx = common.MergeMap(c.ctx, map[string]string{key: value}) // make a copy, DONT modify content
 }
 
 func (c *client) UnsetContext(key string, value string) {
 	log.Info("%+v: %+v %+v", c, key, value)
-	c.ctxL.Lock()
-	defer c.ctxL.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	m := common.MergeMap(c.ctx, nil) // make a copy, DONT modify content
 	if m[key] == value || value == "" {
 		delete(m, key)
@@ -135,21 +138,25 @@ func (c *client) SendBinary(content []byte) {
 }
 
 func (c *client) sendMessage(msg *message) {
-	if atomic.LoadInt32(&c.stopped) == 1 {
+	c.mu.Lock()
+	if c.stopped {
+		c.mu.Unlock()
 		return
 	}
-	defer func() {
-		if v := recover(); v != nil {
-			log.Warnf("panic %+v %+v", v, c) // race: channel may closed
+	if len(c.backlog) == 0 {
+		select {
+		case c.ch <- msg:
+			if !c.writing {
+				c.writing = true
+				go c.write()
+			}
+			c.mu.Unlock()
 			return
+		default:
 		}
-	}()
-	select {
-	case c.writeC <- msg:
-	default:
-		log.Error("channel full ", c)
-		c.Stop()
 	}
+	c.backlog = append(c.backlog, msg)
+	c.mu.Unlock()
 }
 
 func (c *client) ping() {
@@ -159,15 +166,46 @@ func (c *client) ping() {
 
 func (c *client) write() {
 	log.Debug("write start ", c)
+	t := time.NewTimer(idleWait)
 	defer func() {
 		log.Debug("write stop ", c)
-		_ = c.conn.Close()
+		t.Stop()
 	}()
-	for m := range c.writeC {
-		_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-		if err := c.conn.WriteMessage(m.typ, m.content); err != nil {
-			log.Infof("write error %+v %+v", err, c)
-			return
+	for {
+		t.Reset(idleWait)
+		select {
+		case m, ok := <-c.ch:
+			if !ok {
+				log.Debug("ch closed ", c)
+				_ = c.conn.Close()
+				return
+			}
+			// try load next msg
+			c.mu.Lock()
+			if len(c.backlog) > 0 {
+				select {
+				case c.ch <- c.backlog[0]:
+					c.backlog[0] = nil
+					c.backlog = c.backlog[1:]
+				default:
+				}
+			}
+			c.mu.Unlock()
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(m.typ, m.content); err != nil {
+				log.Infof("write error %+v %+v", err, c)
+				_ = c.conn.Close()
+				return
+			}
+		case <-t.C:
+			c.mu.Lock()
+			if len(c.ch) == 0 {
+				c.writing = false
+				c.mu.Unlock()
+				log.Info("idle exit", c)
+				return
+			}
+			c.mu.Unlock()
 		}
 	}
 }
