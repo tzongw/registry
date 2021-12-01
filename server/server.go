@@ -102,6 +102,10 @@ func (c *client) Stop() {
 	if !c.stopped {
 		c.stopped = true
 		close(c.ch)
+		if !c.writing {
+			c.writing = true
+			go c.write()
+		}
 	}
 }
 
@@ -199,7 +203,7 @@ func (c *client) write() {
 			}
 		case <-t.C:
 			c.mu.Lock()
-			if len(c.ch) == 0 {
+			if !c.stopped && len(c.ch) == 0 {
 				c.writing = false
 				c.mu.Unlock()
 				log.Info("idle exit", c)
