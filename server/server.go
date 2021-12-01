@@ -58,7 +58,7 @@ func newClient(id string, conn *websocket.Conn) *client {
 }
 
 func (c *client) String() string {
-	return fmt.Sprintf("%+v %+v", c.id, c.context())
+	return fmt.Sprintf("%+v", c.id)
 }
 
 func (c *client) Serve() {
