@@ -43,7 +43,6 @@ type client struct {
 	conn    *websocket.Conn
 	ctx     map[string]string
 	mu      sync.Mutex
-	stopped bool
 	ch      chan *message
 	backlog []*message
 	writing bool                // write goroutine is running
@@ -97,16 +96,8 @@ func (c *client) Serve() {
 }
 
 func (c *client) Stop() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.stopped {
-		c.stopped = true
-		close(c.ch)
-		if !c.writing {
-			c.writing = true
-			go c.write()
-		}
-	}
+	// some msg may in backlog, can not close ch,  send nil msg as close
+	c.sendMessage(nil)
 }
 
 func (c *client) context() map[string]string {
@@ -143,10 +134,6 @@ func (c *client) SendBinary(content []byte) {
 
 func (c *client) sendMessage(msg *message) {
 	c.mu.Lock()
-	if c.stopped {
-		c.mu.Unlock()
-		return
-	}
 	if len(c.backlog) == 0 {
 		select {
 		case c.ch <- msg:
@@ -178,9 +165,9 @@ func (c *client) write() {
 	for {
 		t.Reset(idleWait)
 		select {
-		case m, ok := <-c.ch:
-			if !ok {
-				log.Debug("ch closed ", c)
+		case m := <-c.ch:
+			if m == nil {
+				log.Debug("stopped ", c)
 				_ = c.conn.Close()
 				return
 			}
@@ -203,7 +190,7 @@ func (c *client) write() {
 			}
 		case <-t.C:
 			c.mu.Lock()
-			if !c.stopped && len(c.ch) == 0 {
+			if len(c.ch) == 0 {
 				c.writing = false
 				c.mu.Unlock()
 				log.Info("idle exit", c)
