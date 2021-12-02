@@ -166,6 +166,9 @@ func (c *client) write() {
 		t.Reset(idleWait)
 		select {
 		case m := <-c.ch:
+			if !t.Stop() {
+				<-t.C
+			}
 			if m == nil {
 				log.Debug("stopped ", c)
 				_ = c.conn.Close()
