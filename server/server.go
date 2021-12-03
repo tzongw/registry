@@ -139,7 +139,11 @@ func (c *client) sendMessage(msg *message) {
 		case c.ch <- msg:
 			if !c.writing {
 				c.writing = true
-				go c.write()
+				idleWait := idleWait
+				if msg == pingMessage { // exit asap
+					idleWait = 0
+				}
+				go c.write(idleWait)
 			}
 			c.mu.Unlock()
 			return
@@ -155,11 +159,11 @@ func (c *client) ping() {
 	_ = shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.id, c.context())
 }
 
-func (c *client) write() {
-	log.Debug("write start ", c)
+func (c *client) write(idleWait time.Duration) {
+	log.Debug("write start ", c, idleWait)
 	t := time.NewTimer(idleWait)
 	defer func() {
-		log.Debug("write stop ", c)
+		log.Debug("write stop ", c, idleWait)
 		t.Stop()
 	}()
 	for {
@@ -196,10 +200,11 @@ func (c *client) write() {
 			if len(c.ch) == 0 {
 				c.writing = false
 				c.mu.Unlock()
-				log.Info("idle exit", c)
+				log.Debug("idle exit ", c, idleWait)
 				return
 			}
 			c.mu.Unlock()
+			log.Info("continue write ", c, idleWait)
 		}
 	}
 }
