@@ -160,14 +160,9 @@ func (c *client) ping() {
 }
 
 func (c *client) write(idleWait time.Duration) {
-	log.Debug("write start ", c, idleWait)
-	t := time.NewTimer(idleWait)
-	defer func() {
-		log.Debug("write stop ", c, idleWait)
-		t.Stop()
-	}()
+	t := time.NewTimer(time.Second) // will reset to idleWait later
+	defer t.Stop()
 	for {
-		t.Reset(idleWait)
 		select {
 		case m := <-c.ch:
 			if !t.Stop() {
@@ -206,6 +201,7 @@ func (c *client) write(idleWait time.Duration) {
 			c.mu.Unlock()
 			log.Info("continue write ", c, idleWait)
 		}
+		t.Reset(idleWait)
 	}
 }
 
