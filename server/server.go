@@ -139,11 +139,11 @@ func (c *client) sendMessage(msg *message) {
 		case c.ch <- msg:
 			if !c.writing {
 				c.writing = true
-				idleWait := idleWait
-				if msg == pingMessage { // exit asap
-					idleWait = 0
+				if msg == pingMessage {
+					go c.shortWrite()
+				} else {
+					go c.longWrite()
 				}
-				go c.write(idleWait)
 			}
 			c.mu.Unlock()
 			return
@@ -159,8 +159,47 @@ func (c *client) ping() {
 	_ = shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.id, c.context())
 }
 
-func (c *client) write(idleWait time.Duration) {
-	t := time.NewTimer(time.Second) // will reset to idleWait later
+func (c *client) writeOne(m *message) bool {
+	if m == nil {
+		log.Debug("stopped ", c)
+		_ = c.conn.Close()
+		return false
+	}
+	// try load next msg
+	c.mu.Lock()
+	if len(c.backlog) > 0 {
+		select {
+		case c.ch <- c.backlog[0]:
+			c.backlog[0] = nil
+			c.backlog = c.backlog[1:]
+		default:
+		}
+	}
+	c.mu.Unlock()
+	_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+	if err := c.conn.WriteMessage(m.typ, m.content); err != nil {
+		log.Infof("write error %+v %+v", err, c)
+		_ = c.conn.Close()
+		return false
+	}
+	return true
+}
+
+func (c *client) writeExit() bool {
+	c.mu.Lock()
+	if len(c.ch) == 0 {
+		c.writing = false
+		c.mu.Unlock()
+		log.Debug("idle exit ", c)
+		return true
+	}
+	c.mu.Unlock()
+	log.Info("continue write ", c)
+	return false
+}
+
+func (c *client) longWrite() {
+	t := time.NewTimer(idleWait)
 	defer t.Stop()
 	for {
 		select {
@@ -168,40 +207,30 @@ func (c *client) write(idleWait time.Duration) {
 			if !t.Stop() {
 				<-t.C
 			}
-			if m == nil {
-				log.Debug("stopped ", c)
-				_ = c.conn.Close()
-				return
-			}
-			// try load next msg
-			c.mu.Lock()
-			if len(c.backlog) > 0 {
-				select {
-				case c.ch <- c.backlog[0]:
-					c.backlog[0] = nil
-					c.backlog = c.backlog[1:]
-				default:
-				}
-			}
-			c.mu.Unlock()
-			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := c.conn.WriteMessage(m.typ, m.content); err != nil {
-				log.Infof("write error %+v %+v", err, c)
-				_ = c.conn.Close()
+			if !c.writeOne(m) {
 				return
 			}
 		case <-t.C:
-			c.mu.Lock()
-			if len(c.ch) == 0 {
-				c.writing = false
-				c.mu.Unlock()
-				log.Debug("idle exit ", c, idleWait)
+			if c.writeExit() {
 				return
 			}
-			c.mu.Unlock()
-			log.Info("continue write ", c, idleWait)
 		}
 		t.Reset(idleWait)
+	}
+}
+
+func (c *client) shortWrite() {
+	for {
+		select {
+		case m := <-c.ch:
+			if !c.writeOne(m) {
+				return
+			}
+		default:
+			if c.writeExit() {
+				return
+			}
+		}
 	}
 }
 
