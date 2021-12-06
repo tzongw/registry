@@ -165,7 +165,7 @@ func (c *client) writeOne(m *message) bool {
 		_ = c.conn.Close()
 		return false
 	}
-	// try load next msg
+	// try load next msg, ch may be filled
 	c.mu.Lock()
 	if len(c.backlog) > 0 {
 		select {
@@ -200,7 +200,6 @@ func (c *client) writeExit() bool {
 
 func (c *client) longWrite() {
 	t := time.NewTimer(idleWait)
-	defer t.Stop()
 	for {
 		select {
 		case m := <-c.ch:
