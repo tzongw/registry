@@ -8,6 +8,7 @@ import (
 	"github.com/tzongw/registry/shared"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync/atomic"
 )
@@ -55,21 +56,37 @@ func WsServe(addr string) string {
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		wsHandle(w, r)
 	})
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	addr = ln.Addr().String()
-	log.Info("listen ", addr)
-	host, port, err := common.HostPort(addr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	server := &http.Server{Addr: addr, Handler: nil}
-	go func() {
-		if err := server.Serve(ln); err != nil {
+	if strings.HasPrefix(addr, "/") {
+		_ = os.Remove(addr)
+		ln, err := net.Listen("unix", addr)
+		if err != nil {
 			log.Fatal(err)
 		}
-	}()
-	return net.JoinHostPort(host, port)
+		log.Info("listen unix ", addr)
+		server := &http.Server{Addr: addr, Handler: nil}
+		go func() {
+			if err := server.Serve(ln); err != nil {
+				log.Fatal(err)
+			}
+		}()
+		return "unix:/" + addr
+	} else {
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		addr = ln.Addr().String()
+		log.Info("listen tcp ", addr)
+		host, port, err := common.HostPort(addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		server := &http.Server{Addr: addr, Handler: nil}
+		go func() {
+			if err := server.Serve(ln); err != nil {
+				log.Fatal(err)
+			}
+		}()
+		return net.JoinHostPort(host, port)
+	}
 }
