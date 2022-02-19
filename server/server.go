@@ -62,10 +62,10 @@ func (c *client) String() string {
 }
 
 func (c *client) Serve() {
-	log.Info("serve start ", c)
+	log.Debug("serve start ", c)
 	timer := time.AfterFunc(common.PingInterval, c.ping)
 	defer func() {
-		log.Info("serve stop ", c)
+		log.Debug("serve stop ", c)
 		timer.Stop()
 		c.Stop()
 		_ = shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.id, c.context())

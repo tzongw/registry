@@ -6,6 +6,7 @@ import (
 	"github.com/apache/thrift/lib/go/thrift"
 	log "github.com/sirupsen/logrus"
 	"math/rand"
+	"sort"
 	"sync"
 	"time"
 )
@@ -82,11 +83,12 @@ func init() {
 }
 
 type ServiceClient struct {
-	service  string
-	registry *Registry
-	opt      *Options
-	m        sync.Mutex
-	clients  map[string]*NodeClient
+	service        string
+	registry       *Registry
+	opt            *Options
+	m              sync.Mutex
+	clients        map[string]*NodeClient
+	localAddresses sort.StringSlice
 }
 
 func NewServiceClient(registry *Registry, service string, opt *Options) *ServiceClient {
@@ -105,12 +107,19 @@ func (c *ServiceClient) clean() {
 	addresses := c.registry.Addresses(c.service)
 	c.m.Lock()
 	defer c.m.Unlock()
+	c.localAddresses = nil
+	for _, addr := range addresses {
+		host, _, _ := HostPort(addr)
+		if host == localIP {
+			c.localAddresses = append(c.localAddresses, addr)
+		}
+	}
 	for addr, client := range c.clients {
 		index := FindIndex(len(addresses), func(i int) bool {
 			return addresses[i] == addr
 		})
 		if index < 0 {
-			log.Warnf("close client %+v %+v", c.service, addr)
+			log.Infof("close client %+v %+v", c.service, addr)
 			client.Close()
 			delete(c.clients, addr)
 		}
@@ -153,6 +162,12 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 			return err
 		}
 	} else {
+		c.m.Lock()
+		if len(c.localAddresses) > 0 {
+			// pick local address if available
+			addresses = c.localAddresses
+		}
+		c.m.Unlock()
 		i := rand.Intn(len(addresses))
 		addr := addresses[i]
 		client := c.client(addr)
