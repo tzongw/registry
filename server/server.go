@@ -114,7 +114,7 @@ func (c *client) SetContext(key string, value string) {
 }
 
 func (c *client) UnsetContext(key string, value string) {
-	log.Info("%+v: %+v %+v", c, key, value)
+	log.Infof("%+v: %+v %+v", c, key, value)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	m := common.MergeMap(c.ctx, nil) // make a copy, DONT modify content
