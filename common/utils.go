@@ -23,8 +23,8 @@ func Contains[T comparable](elems []T, v T) bool {
 	return FindIndex(elems, v) >= 0
 }
 
-func MergeMap(first map[string]string, second map[string]string) map[string]string {
-	m := make(map[string]string, len(first)+len(second))
+func MergeMap[K comparable, V any](first map[K]V, second map[K]V) map[K]V {
+	m := make(map[K]V, len(first)+len(second))
 	for k, v := range first {
 		m[k] = v
 	}
