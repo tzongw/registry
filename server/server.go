@@ -314,10 +314,7 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 	// this may take a while
 	go g.clients.Range(func(key, _ any) bool {
 		c := key.(*client)
-		index := common.FindIndex(len(exclude), func(i int) bool {
-			return c.id == exclude[i]
-		})
-		if index < 0 {
+		if !common.Contains(exclude, c.id) {
 			c.sendMessage(msg)
 		}
 		return true

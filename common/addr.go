@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	localIP string
+	LocalIP string
 )
 
 func init() {
@@ -18,7 +18,7 @@ func init() {
 	}
 	addr := conn.LocalAddr().String()
 	ss := strings.SplitN(addr, ":", 2)
-	localIP = ss[0]
+	LocalIP = ss[0]
 	conn.Close()
 }
 
@@ -29,5 +29,5 @@ func Extract(addr string) (string, error) {
 		return addr, nil
 	}
 
-	return localIP, nil
+	return LocalIP, nil
 }

@@ -10,13 +10,17 @@ func HostPort(hp string) (host, port string, err error) {
 	return
 }
 
-func FindIndex(limit int, predicate func(i int) bool) int {
-	for i := 0; i < limit; i++ {
-		if predicate(i) {
-			return i
+func FindIndex[T comparable](elems []T, v T) int {
+	for index, elem := range elems {
+		if v == elem {
+			return index
 		}
 	}
 	return -1
+}
+
+func Contains[T comparable](elems []T, v T) bool {
+	return FindIndex(elems, v) >= 0
 }
 
 func MergeMap(first map[string]string, second map[string]string) map[string]string {

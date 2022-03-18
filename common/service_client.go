@@ -110,15 +110,12 @@ func (c *ServiceClient) clean() {
 	c.localAddresses = nil
 	for _, addr := range addresses {
 		host, _, _ := HostPort(addr)
-		if host == localIP {
+		if host == LocalIP {
 			c.localAddresses = append(c.localAddresses, addr)
 		}
 	}
 	for addr, client := range c.clients {
-		index := FindIndex(len(addresses), func(i int) bool {
-			return addresses[i] == addr
-		})
-		if index < 0 {
+		if !Contains(addresses, addr) {
 			log.Infof("close client %+v %+v", c.service, addr)
 			client.Close()
 			delete(c.clients, addr)
