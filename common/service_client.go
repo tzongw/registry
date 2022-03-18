@@ -3,13 +3,11 @@ package common
 import (
 	"context"
 	"errors"
+	"github.com/apache/thrift/lib/go/thrift"
+	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"sort"
 	"sync"
-	"time"
-
-	"github.com/apache/thrift/lib/go/thrift"
-	log "github.com/sirupsen/logrus"
 )
 
 type client struct {
@@ -52,17 +50,17 @@ func (t *ThriftFactory) Close(c *client) error {
 	return c.trans.Close()
 }
 
-type NodeClient struct {
+type AddrClient struct {
 	p *Pool[client]
 }
 
-func NewNodeClient(addr string, opt *Options) *NodeClient {
-	return &NodeClient{
+func NewAddrClient(addr string, opt *Options) *AddrClient {
+	return &AddrClient{
 		p: NewPool[client](NewThriftFactory(addr), opt),
 	}
 }
 
-func (c *NodeClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
+func (c *AddrClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
 	cc, err := c.p.Get()
 	if err != nil {
 		return err
@@ -72,22 +70,18 @@ func (c *NodeClient) Call(ctx context.Context, method string, args, result thrif
 	return err
 }
 
-func (c *NodeClient) Close() {
+func (c *AddrClient) Close() {
 	c.p.Close()
 }
 
 var ErrUnavailable = errors.New("unavailable")
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 type ServiceClient struct {
 	service        string
 	registry       *Registry
 	opt            *Options
 	m              sync.Mutex
-	clients        map[string]*NodeClient
+	clients        map[string]*AddrClient
 	localAddresses sort.StringSlice
 }
 
@@ -96,7 +90,7 @@ func NewServiceClient(registry *Registry, service string, opt *Options) *Service
 		registry: registry,
 		service:  service,
 		opt:      opt,
-		clients:  make(map[string]*NodeClient),
+		clients:  make(map[string]*AddrClient),
 	}
 	registry.AddCallback(c.clean)
 	return c
@@ -172,12 +166,12 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 	}
 }
 
-func (c *ServiceClient) client(addr string) *NodeClient {
+func (c *ServiceClient) client(addr string) *AddrClient {
 	c.m.Lock()
 	defer c.m.Unlock()
 	client, ok := c.clients[addr]
 	if !ok {
-		client = NewNodeClient(addr, c.opt)
+		client = NewAddrClient(addr, c.opt)
 		c.clients[addr] = client
 	}
 	return client
