@@ -2,7 +2,6 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -59,7 +58,7 @@ func newClient(id string, conn *websocket.Conn) *client {
 }
 
 func (c *client) String() string {
-	return fmt.Sprintf("%+v", c.id)
+	return c.id
 }
 
 func (c *client) Serve() {
@@ -118,11 +117,11 @@ func (c *client) UnsetContext(key string, value string) {
 	log.Infof("%+v: %+v %+v", c, key, value)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	m := common.MergeMap(c.ctx, nil) // make a copy, DONT modify content
-	if m[key] == value || value == "" {
+	if value == "" || c.ctx[key] == value {
+		m := common.MergeMap(c.ctx, nil) // make a copy, DONT modify content
 		delete(m, key)
+		c.ctx = m
 	}
-	c.ctx = m
 }
 
 func (c *client) SendText(content string) {
