@@ -3,12 +3,13 @@ package server
 import (
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/tzongw/registry/common"
 	"github.com/tzongw/registry/shared"
-	"sync"
-	"time"
 )
 
 const (
@@ -311,7 +312,7 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 		return
 	}
 	// this may take a while
-	go g.clients.Range(func(key, _ interface{}) bool {
+	go g.clients.Range(func(key, _ any) bool {
 		c := key.(*client)
 		index := common.FindIndex(len(exclude), func(i int) bool {
 			return c.id == exclude[i]

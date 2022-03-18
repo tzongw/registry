@@ -130,7 +130,7 @@ var RandomCtx = context.Background()
 
 type tNodeSelector int
 
-var selector interface{} = tNodeSelector(0)
+var selector any = tNodeSelector(0)
 var broadcast = 0
 var BroadcastCtx = context.WithValue(context.Background(), selector, broadcast)
 
