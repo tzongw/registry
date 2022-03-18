@@ -2,16 +2,17 @@ package common
 
 import (
 	"errors"
-	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var ErrTimeout = errors.New("pool timeout")
 
-type Factory interface {
-	Open() (interface{}, error)
-	Close(interface{}) error
+type Factory[T any] interface {
+	Open() (*T, error)
+	Close(*T) error
 }
 
 type Options struct {
@@ -28,27 +29,27 @@ func DefaultOptions() *Options {
 	}
 }
 
-type Pool struct {
-	factory Factory
+type Pool[T any] struct {
+	factory Factory[T]
 	opt     *Options
-	idleC   chan interface{}
+	idleC   chan *T
 	size    int
 	queue   int
 	closed  bool
 	m       sync.Mutex
 }
 
-func NewPool(factory Factory, opt *Options) *Pool {
+func NewPool[T any](factory Factory[T], opt *Options) *Pool[T] {
 	if opt == nil {
 		opt = DefaultOptions()
 	}
-	return &Pool{
+	return &Pool[T]{
 		factory: factory,
 		opt:     opt,
-		idleC:   make(chan interface{}, opt.PoolSize)}
+		idleC:   make(chan *T, opt.PoolSize)}
 }
 
-func (p *Pool) Close() {
+func (p *Pool[T]) Close() {
 	p.m.Lock()
 	defer p.m.Unlock()
 	p.closed = true
@@ -62,7 +63,7 @@ func (p *Pool) Close() {
 	}
 }
 
-func (p *Pool) Get() (interface{}, error) {
+func (p *Pool[T]) Get() (*T, error) {
 	p.m.Lock()
 	if p.queue == 0 && len(p.idleC) > 0 {
 		defer p.m.Unlock()
@@ -103,7 +104,7 @@ func (p *Pool) Get() (interface{}, error) {
 	}
 }
 
-func (p *Pool) Put(i interface{}, err error) {
+func (p *Pool[T]) Put(i *T, err error) {
 	p.m.Lock()
 	defer p.m.Unlock()
 	if err != nil || p.closed {

@@ -3,12 +3,13 @@ package common
 import (
 	"context"
 	"errors"
-	"github.com/apache/thrift/lib/go/thrift"
-	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/apache/thrift/lib/go/thrift"
+	log "github.com/sirupsen/logrus"
 )
 
 type client struct {
@@ -30,7 +31,7 @@ func NewThriftFactory(addr string) *ThriftFactory {
 	}
 }
 
-func (t *ThriftFactory) Open() (interface{}, error) {
+func (t *ThriftFactory) Open() (*client, error) {
 	sock, err := thrift.NewTSocket(t.addr)
 	if err != nil {
 		return nil, err
@@ -47,18 +48,17 @@ func (t *ThriftFactory) Open() (interface{}, error) {
 	return &client{TStandardClient: thrift.NewTStandardClient(iprot, oprot), trans: transport}, nil
 }
 
-func (t *ThriftFactory) Close(conn interface{}) error {
-	c := conn.(*client)
+func (t *ThriftFactory) Close(c *client) error {
 	return c.trans.Close()
 }
 
 type NodeClient struct {
-	p *Pool
+	p *Pool[client]
 }
 
 func NewNodeClient(addr string, opt *Options) *NodeClient {
 	return &NodeClient{
-		p: NewPool(NewThriftFactory(addr), opt),
+		p: NewPool[client](NewThriftFactory(addr), opt),
 	}
 }
 
@@ -67,7 +67,7 @@ func (c *NodeClient) Call(ctx context.Context, method string, args, result thrif
 	if err != nil {
 		return err
 	}
-	err = cc.(*client).Call(ctx, method, args, result)
+	err = cc.Call(ctx, method, args, result)
 	c.p.Put(cc, err)
 	return err
 }
@@ -192,7 +192,7 @@ func (c *ServiceClient) ConnClient(addr string, f func(conn thrift.TClient) erro
 	if err != nil {
 		return err
 	}
-	err = f(conn.(*client))
+	err = f(conn)
 	nodeClient.p.Put(conn, err)
 	return err
 }
