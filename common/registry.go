@@ -54,7 +54,7 @@ func NewRegistry(client *redis.Client) *Registry {
 }
 
 func (s *Registry) Start(services map[string]string) {
-	log.Info("start")
+	log.Info("start ", services)
 	s.services = services
 	s.unregister()
 	s.refresh()
@@ -76,7 +76,7 @@ func (s *Registry) Addresses(name string) sort.StringSlice {
 }
 
 func (s *Registry) unregister() {
-	log.Debug("unregister")
+	log.Info("unregister")
 	if len(s.services) == 0 {
 		return
 	}

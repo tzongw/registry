@@ -81,7 +81,7 @@ func (c *client) Serve() {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
 		mType, message, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Info(err)
+			log.Debug(err)
 			return
 		}
 		switch mType {
@@ -107,14 +107,14 @@ func (c *client) context() map[string]string {
 }
 
 func (c *client) SetContext(key string, value string) {
-	log.Infof("%+v: %+v %+v", c, key, value)
+	log.Debugf("%+v: %+v %+v", c, key, value)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.ctx = common.MergeMap(c.ctx, map[string]string{key: value}) // make a copy, DONT modify content
 }
 
 func (c *client) UnsetContext(key string, value string) {
-	log.Infof("%+v: %+v %+v", c, key, value)
+	log.Debugf("%+v: %+v %+v", c, key, value)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if value == "" || c.ctx[key] == value {
@@ -185,16 +185,14 @@ func (c *client) writeOne(m *message) bool {
 	return true
 }
 
-func (c *client) writeExit() bool {
+func (c *client) exitWrite() bool {
 	c.mu.Lock()
 	if len(c.ch) == 0 {
 		c.writing = false
 		c.mu.Unlock()
-		log.Debug("idle exit ", c)
 		return true
 	}
 	c.mu.Unlock()
-	log.Info("continue write ", c)
 	return false
 }
 
@@ -210,7 +208,7 @@ func (c *client) longWrite() {
 				return
 			}
 		case <-t.C:
-			if c.writeExit() {
+			if c.exitWrite() {
 				return
 			}
 		}
@@ -226,7 +224,7 @@ func (c *client) shortWrite() {
 				return
 			}
 		default:
-			if c.writeExit() {
+			if c.exitWrite() {
 				return
 			}
 		}
@@ -262,7 +260,7 @@ func joinGroup(connId, group string) error {
 	if !ok {
 		g = &groupInfo{}
 		groups[group] = g
-		log.Infof("create group %+v, groups: %d", group, len(groups))
+		log.Debugf("create group %+v, groups: %d", group, len(groups))
 	}
 	g.clients.Store(c, nil)
 	g.count++
@@ -291,7 +289,7 @@ func removeFromGroup(c *client, group string) {
 	g.count--
 	if g.count == 0 {
 		delete(groups, group)
-		log.Infof("delete group %+v, groups: %d", group, len(groups))
+		log.Debugf("delete group %+v, groups: %d", group, len(groups))
 	}
 }
 
