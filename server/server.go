@@ -20,6 +20,7 @@ const (
 
 var clients sync.Map
 var clientCount int64
+var timerPool sync.Pool
 
 var errNotExist = errors.New("not exist")
 
@@ -197,7 +198,14 @@ func (c *client) exitWrite() bool {
 }
 
 func (c *client) longWrite() {
-	t := time.NewTimer(idleWait)
+	var t *time.Timer
+	if v := timerPool.Get(); v != nil {
+		t = v.(*time.Timer)
+		t.Reset(idleWait)
+	} else {
+		t = time.NewTimer(idleWait)
+	}
+	defer timerPool.Put(t)
 	for {
 		select {
 		case m := <-c.ch:
