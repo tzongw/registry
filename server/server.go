@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -15,7 +16,6 @@ const (
 	readWait       = 3 * common.PingInterval
 	writeWait      = time.Second
 	maxMessageSize = 100 * 1024
-	idleWait       = 5 * time.Second
 )
 
 var clients sync.Map
@@ -199,6 +199,7 @@ func (c *client) exitWrite() bool {
 
 func (c *client) longWrite() {
 	var t *time.Timer
+	idleWait := common.PingInterval/4 + time.Duration(rand.Int63n(int64(common.PingInterval/2)))
 	if v := timerPool.Get(); v != nil {
 		t = v.(*time.Timer)
 		t.Reset(idleWait)
