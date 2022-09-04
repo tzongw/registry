@@ -69,7 +69,7 @@ func WsServe(addr string) string {
 				log.Fatal(err)
 			}
 		}()
-		return "unix:/" + addr
+		return "unix://" + addr
 	} else {
 		ln, err := net.Listen("tcp", addr)
 		if err != nil {
