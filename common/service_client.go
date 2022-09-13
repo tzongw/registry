@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
+	"time"
 )
 
 type client struct {
@@ -83,6 +84,8 @@ type ServiceClient struct {
 	m              sync.Mutex
 	clients        map[string]*AddrClient
 	localAddresses sort.StringSlice
+	goodAddresses  sort.StringSlice
+	coolDown       map[string]time.Time
 }
 
 func NewServiceClient(registry *Registry, service string, opt *Options) *ServiceClient {
@@ -93,7 +96,21 @@ func NewServiceClient(registry *Registry, service string, opt *Options) *Service
 		clients:  make(map[string]*AddrClient),
 	}
 	registry.AddCallback(c.clean)
+	go c.reapCoolDown()
 	return c
+}
+
+func (c *ServiceClient) reapCoolDown() {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		c.m.Lock()
+		count := len(c.coolDown)
+		c.m.Unlock()
+		if count > 0 {
+			c.clean()
+		}
+	}
 }
 
 func (c *ServiceClient) clean() {
@@ -101,8 +118,19 @@ func (c *ServiceClient) clean() {
 	addresses := c.registry.Addresses(c.service)
 	c.m.Lock()
 	defer c.m.Unlock()
+	now := time.Now()
+	for addr, cd := range c.coolDown {
+		if now.After(cd) {
+			delete(c.coolDown, addr)
+		}
+	}
+	c.goodAddresses = nil
 	c.localAddresses = nil
 	for _, addr := range addresses {
+		if _, ok := c.coolDown[addr]; ok {
+			continue
+		}
+		c.goodAddresses = append(c.goodAddresses, addr)
 		host, _, _ := HostPort(addr)
 		if host == LocalIP {
 			c.localAddresses = append(c.localAddresses, addr)
@@ -115,6 +143,12 @@ func (c *ServiceClient) clean() {
 			delete(c.clients, addr)
 		}
 	}
+}
+
+func (c *ServiceClient) addCoolDown(addr string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.coolDown[addr] = time.Now().Add(CoolDown)
 }
 
 var RandomCtx = context.Background()
@@ -137,7 +171,11 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 	if v := ctx.Value(selector); v != nil {
 		if addr, ok := v.(string); ok {
 			client := c.client(addr)
-			return client.Call(ctx, method, args, result)
+			err := client.Call(ctx, method, args, result)
+			if err != nil {
+				c.addCoolDown(addr)
+			}
+			return err
 		} else {
 			if result != nil {
 				panic("broadcast MUST be oneway")
@@ -146,7 +184,8 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 			for _, addr := range addresses {
 				client := c.client(addr)
 				e := client.Call(ctx, method, args, result)
-				if err == nil { // first error
+				if e != nil {
+					c.addCoolDown(addr)
 					err = e
 				}
 			}
@@ -155,14 +194,19 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 	} else {
 		c.m.Lock()
 		if len(c.localAddresses) > 0 {
-			// pick local address if available
 			addresses = c.localAddresses
+		} else if len(c.goodAddresses) > 0 {
+			addresses = c.goodAddresses
 		}
 		c.m.Unlock()
 		i := rand.Intn(len(addresses))
 		addr := addresses[i]
 		client := c.client(addr)
-		return client.Call(ctx, method, args, result)
+		err := client.Call(ctx, method, args, result)
+		if err != nil {
+			c.addCoolDown(addr)
+		}
+		return err
 	}
 }
 
