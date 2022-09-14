@@ -95,7 +95,7 @@ func NewServiceClient(registry *Registry, service string, opt *Options) *Service
 		opt:      opt,
 		clients:  make(map[string]*AddrClient),
 	}
-	registry.AddCallback(c.clean)
+	registry.AddCallback(c.updateAddresses)
 	go c.reapCoolDown()
 	return c
 }
@@ -108,13 +108,13 @@ func (c *ServiceClient) reapCoolDown() {
 		count := len(c.coolDown)
 		c.m.Unlock()
 		if count > 0 {
-			c.clean()
+			c.updateAddresses()
 		}
 	}
 }
 
-func (c *ServiceClient) clean() {
-	log.Infof("watch %+v", c.service)
+func (c *ServiceClient) updateAddresses() {
+	log.Infof("update %+v", c.service)
 	addresses := c.registry.Addresses(c.service)
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -147,8 +147,13 @@ func (c *ServiceClient) clean() {
 
 func (c *ServiceClient) addCoolDown(addr string) {
 	c.m.Lock()
-	defer c.m.Unlock()
+	_, ok := c.coolDown[addr]
 	c.coolDown[addr] = time.Now().Add(CoolDown)
+	c.m.Unlock()
+	if !ok {
+		log.Warnf("+ cool down %+v %+v", c.service, addr)
+		c.updateAddresses()
+	}
 }
 
 var RandomCtx = context.Background()
