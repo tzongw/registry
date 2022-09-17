@@ -8,9 +8,10 @@ import (
 )
 
 var (
-	Registry   = base.NewRegistry(redis.NewClient(&redis.Options{}))
-	UserClient = service.NewUserClient(base.NewServiceClient(Registry, RpcUser, nil))
-	GateClient = NewGateClient(base.NewServiceClient(Registry, RpcGate, nil))
+	Redis      *redis.Client
+	Registry   *base.Registry
+	UserClient *service.UserClient
+	GateClient *tGateClient
 )
 
 type tGateClient struct {
@@ -29,4 +30,11 @@ func (c *tGateClient) ConnClient(addr string, f func(gate service.Gate) error) e
 	return c.client.ConnClient(addr, func(conn thrift.TClient) error {
 		return f(service.NewGateClient(conn))
 	})
+}
+
+func InitShared() {
+	Redis = redis.NewClient(&redis.Options{Addr: *redisAddr})
+	Registry = base.NewRegistry(Redis)
+	UserClient = service.NewUserClient(base.NewServiceClient(Registry, RpcUser, nil))
+	GateClient = NewGateClient(base.NewServiceClient(Registry, RpcGate, nil))
 }

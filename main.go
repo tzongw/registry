@@ -24,6 +24,7 @@ func main() {
 	} else {
 		log.SetLevel(log.InfoLevel)
 	}
+	common.InitShared()
 	log.SetReportCaller(true)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	common.Registry.Start(map[string]string{
