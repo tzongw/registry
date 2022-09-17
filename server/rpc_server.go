@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/apache/thrift/lib/go/thrift"
 	log "github.com/sirupsen/logrus"
-	"github.com/tzongw/registry/common"
+	"github.com/tzongw/registry/base"
 	"github.com/tzongw/registry/gen-go/service"
 )
 
@@ -89,7 +89,7 @@ func RpcServe() (addr string) {
 	}
 	addr = transport.Addr().String()
 	log.Info("listen ", addr)
-	host, port, err := common.HostPort(addr)
+	host, port, err := base.HostPort(addr)
 	if err != nil {
 		log.Fatal(err)
 	}

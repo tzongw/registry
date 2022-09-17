@@ -3,22 +3,22 @@ package shared
 import (
 	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/go-redis/redis"
-	"github.com/tzongw/registry/common"
+	"github.com/tzongw/registry/base"
 	"github.com/tzongw/registry/gen-go/service"
 )
 
 var (
-	Registry   = common.NewRegistry(redis.NewClient(&redis.Options{}))
-	UserClient = service.NewUserClient(common.NewServiceClient(Registry, common.RpcUser, nil))
-	GateClient = NewGateClient(common.NewServiceClient(Registry, common.RpcGate, nil))
+	Registry   = base.NewRegistry(redis.NewClient(&redis.Options{}))
+	UserClient = service.NewUserClient(base.NewServiceClient(Registry, base.RpcUser, nil))
+	GateClient = NewGateClient(base.NewServiceClient(Registry, base.RpcGate, nil))
 )
 
 type tGateClient struct {
 	*service.GateClient
-	client *common.ServiceClient
+	client *base.ServiceClient
 }
 
-func NewGateClient(c *common.ServiceClient) *tGateClient {
+func NewGateClient(c *base.ServiceClient) *tGateClient {
 	return &tGateClient{
 		GateClient: service.NewGateClient(c),
 		client:     c,

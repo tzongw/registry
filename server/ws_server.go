@@ -4,7 +4,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
-	"github.com/tzongw/registry/common"
+	"github.com/tzongw/registry/base"
 	"github.com/tzongw/registry/shared"
 	"net"
 	"net/http"
@@ -44,7 +44,7 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	for k := range query {
 		params[k] = query.Get(k)
 	}
-	err = shared.UserClient.Login(common.RandomCtx, rpcAddr, connId, params)
+	err = shared.UserClient.Login(base.RandomCtx, rpcAddr, connId, params)
 	if err != nil {
 		log.Error(err)
 		return
@@ -77,7 +77,7 @@ func WsServe(addr string) string {
 		}
 		addr = ln.Addr().String()
 		log.Info("listen tcp ", addr)
-		host, port, err := common.HostPort(addr)
+		host, port, err := base.HostPort(addr)
 		if err != nil {
 			log.Fatal(err)
 		}

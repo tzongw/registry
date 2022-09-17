@@ -8,12 +8,12 @@ import (
 
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
-	"github.com/tzongw/registry/common"
+	"github.com/tzongw/registry/base"
 	"github.com/tzongw/registry/shared"
 )
 
 const (
-	readWait       = 3 * common.PingInterval
+	readWait       = 3 * base.PingInterval
 	writeWait      = time.Second
 	maxMessageSize = 100 * 1024
 )
@@ -64,18 +64,18 @@ func (c *client) String() string {
 
 func (c *client) Serve() {
 	log.Debug("serve start ", c)
-	timer := time.AfterFunc(common.PingInterval, c.ping)
+	timer := time.AfterFunc(base.PingInterval, c.ping)
 	defer func() {
 		log.Debug("serve stop ", c)
 		timer.Stop()
 		c.Stop()
-		_ = shared.UserClient.Disconnect(common.RandomCtx, rpcAddr, c.id, c.context())
+		_ = shared.UserClient.Disconnect(base.RandomCtx, rpcAddr, c.id, c.context())
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 	h := c.conn.PongHandler()
 	c.conn.SetPongHandler(func(appData string) error {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
-		timer.Reset(common.PingInterval)
+		timer.Reset(base.PingInterval)
 		return h(appData)
 	})
 	for {
@@ -87,9 +87,9 @@ func (c *client) Serve() {
 		}
 		switch mType {
 		case websocket.BinaryMessage:
-			_ = shared.UserClient.RecvBinary(common.RandomCtx, rpcAddr, c.id, c.context(), message)
+			_ = shared.UserClient.RecvBinary(base.RandomCtx, rpcAddr, c.id, c.context(), message)
 		case websocket.TextMessage:
-			_ = shared.UserClient.RecvText(common.RandomCtx, rpcAddr, c.id, c.context(), string(message))
+			_ = shared.UserClient.RecvText(base.RandomCtx, rpcAddr, c.id, c.context(), string(message))
 		default:
 			log.Errorf("unknown message %+v, %+v", mType, message)
 		}
@@ -111,7 +111,7 @@ func (c *client) SetContext(key string, value string) {
 	log.Debugf("%+v: %+v %+v", c, key, value)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.ctx = common.MergeMap(c.ctx, map[string]string{key: value}) // make a copy, DONT modify content
+	c.ctx = base.MergeMap(c.ctx, map[string]string{key: value}) // make a copy, DONT modify content
 }
 
 func (c *client) UnsetContext(key string, value string) {
@@ -119,7 +119,7 @@ func (c *client) UnsetContext(key string, value string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if value == "" || c.ctx[key] == value {
-		m := common.MergeMap(c.ctx, nil) // make a copy, DONT modify content
+		m := base.MergeMap(c.ctx, nil) // make a copy, DONT modify content
 		delete(m, key)
 		c.ctx = m
 	}
@@ -157,7 +157,7 @@ func (c *client) sendMessage(msg *message) {
 
 func (c *client) ping() {
 	c.sendMessage(pingMessage)
-	_ = shared.UserClient.Ping(common.RandomCtx, rpcAddr, c.id, c.context())
+	_ = shared.UserClient.Ping(base.RandomCtx, rpcAddr, c.id, c.context())
 }
 
 func (c *client) writeOne(m *message) bool {
@@ -199,7 +199,7 @@ func (c *client) exitWrite() bool {
 
 func (c *client) longWrite() {
 	var t *time.Timer
-	idleWait := common.PingInterval/4 + time.Duration(rand.Int63n(int64(common.PingInterval/2)))
+	idleWait := base.PingInterval/4 + time.Duration(rand.Int63n(int64(base.PingInterval/2)))
 	if v := timerPool.Get(); v != nil {
 		t = v.(*time.Timer)
 		t.Reset(idleWait)
@@ -320,7 +320,7 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 	// this may take a while
 	go g.clients.Range(func(key, _ any) bool {
 		c := key.(*client)
-		if !common.Contains(exclude, c.id) {
+		if !base.Contains(exclude, c.id) {
 			c.sendMessage(msg)
 		}
 		return true
