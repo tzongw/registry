@@ -5,7 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/tzongw/registry/base"
-	"github.com/tzongw/registry/shared"
+	"github.com/tzongw/registry/common"
 	"net"
 	"net/http"
 	"os"
@@ -44,7 +44,7 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	for k := range query {
 		params[k] = query.Get(k)
 	}
-	err = shared.UserClient.Login(base.RandomCtx, rpcAddr, connId, params)
+	err = common.UserClient.Login(base.RandomCtx, rpcAddr, connId, params)
 	if err != nil {
 		log.Error(err)
 		return

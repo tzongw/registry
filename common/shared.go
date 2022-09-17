@@ -1,4 +1,4 @@
-package shared
+package common
 
 import (
 	"github.com/apache/thrift/lib/go/thrift"
@@ -9,8 +9,8 @@ import (
 
 var (
 	Registry   = base.NewRegistry(redis.NewClient(&redis.Options{}))
-	UserClient = service.NewUserClient(base.NewServiceClient(Registry, base.RpcUser, nil))
-	GateClient = NewGateClient(base.NewServiceClient(Registry, base.RpcGate, nil))
+	UserClient = service.NewUserClient(base.NewServiceClient(Registry, RpcUser, nil))
+	GateClient = NewGateClient(base.NewServiceClient(Registry, RpcGate, nil))
 )
 
 type tGateClient struct {

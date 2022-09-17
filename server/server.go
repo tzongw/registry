@@ -9,11 +9,11 @@ import (
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/tzongw/registry/base"
-	"github.com/tzongw/registry/shared"
+	"github.com/tzongw/registry/common"
 )
 
 const (
-	readWait       = 3 * base.PingInterval
+	readWait       = 3 * common.PingInterval
 	writeWait      = time.Second
 	maxMessageSize = 100 * 1024
 )
@@ -64,18 +64,18 @@ func (c *client) String() string {
 
 func (c *client) Serve() {
 	log.Debug("serve start ", c)
-	timer := time.AfterFunc(base.PingInterval, c.ping)
+	timer := time.AfterFunc(common.PingInterval, c.ping)
 	defer func() {
 		log.Debug("serve stop ", c)
 		timer.Stop()
 		c.Stop()
-		_ = shared.UserClient.Disconnect(base.RandomCtx, rpcAddr, c.id, c.context())
+		_ = common.UserClient.Disconnect(base.RandomCtx, rpcAddr, c.id, c.context())
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 	h := c.conn.PongHandler()
 	c.conn.SetPongHandler(func(appData string) error {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
-		timer.Reset(base.PingInterval)
+		timer.Reset(common.PingInterval)
 		return h(appData)
 	})
 	for {
@@ -87,9 +87,9 @@ func (c *client) Serve() {
 		}
 		switch mType {
 		case websocket.BinaryMessage:
-			_ = shared.UserClient.RecvBinary(base.RandomCtx, rpcAddr, c.id, c.context(), message)
+			_ = common.UserClient.RecvBinary(base.RandomCtx, rpcAddr, c.id, c.context(), message)
 		case websocket.TextMessage:
-			_ = shared.UserClient.RecvText(base.RandomCtx, rpcAddr, c.id, c.context(), string(message))
+			_ = common.UserClient.RecvText(base.RandomCtx, rpcAddr, c.id, c.context(), string(message))
 		default:
 			log.Errorf("unknown message %+v, %+v", mType, message)
 		}
@@ -157,7 +157,7 @@ func (c *client) sendMessage(msg *message) {
 
 func (c *client) ping() {
 	c.sendMessage(pingMessage)
-	_ = shared.UserClient.Ping(base.RandomCtx, rpcAddr, c.id, c.context())
+	_ = common.UserClient.Ping(base.RandomCtx, rpcAddr, c.id, c.context())
 }
 
 func (c *client) writeOne(m *message) bool {
@@ -199,7 +199,7 @@ func (c *client) exitWrite() bool {
 
 func (c *client) longWrite() {
 	var t *time.Timer
-	idleWait := base.PingInterval/4 + time.Duration(rand.Int63n(int64(base.PingInterval/2)))
+	idleWait := common.PingInterval/4 + time.Duration(rand.Int63n(int64(common.PingInterval/2)))
 	if v := timerPool.Get(); v != nil {
 		t = v.(*time.Timer)
 		t.Reset(idleWait)
