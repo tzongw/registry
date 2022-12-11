@@ -58,7 +58,7 @@ func (s *Registry) Start(services map[string]string) {
 	s.services = services
 	s.unregister()
 	s.refresh()
-	time.AfterFunc(500*time.Millisecond, s.run)
+	go s.run()
 }
 
 func (s *Registry) Stop() {
@@ -135,9 +135,9 @@ func (s *Registry) run() {
 	log.Debug("run")
 	published := false
 	sub := s.client.Subscribe(Prefix)
-	for atomic.LoadInt32(&s.stopped) == 0 {
-		if len(s.services) > 0 {
-			s.client.Pipelined(func(p redis.Pipeliner) error {
+	for {
+		if len(s.services) > 0 && atomic.LoadInt32(&s.stopped) == 0 {
+			_, _ = s.client.Pipelined(func(p redis.Pipeliner) error {
 				for name, addr := range s.services {
 					key := fullKey(name, addr)
 					p.Set(key, "", TTL)
