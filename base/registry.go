@@ -1,8 +1,9 @@
 package base
 
 import (
+	"context"
 	"errors"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v9"
 	log "github.com/sirupsen/logrus"
 	"net"
 	"reflect"
@@ -25,7 +26,7 @@ type ServiceMap map[string]sort.StringSlice
 type Registry struct {
 	services     map[string]string
 	serviceMap   atomic.Value
-	client       *redis.Client
+	redis        *redis.Client
 	stopped      int32
 	m            sync.Mutex
 	afterRefresh []func()
@@ -47,9 +48,9 @@ func unpack(key string) (string, string, error) {
 	return ss[1], ss[2], nil
 }
 
-func NewRegistry(client *redis.Client) *Registry {
+func NewRegistry(redis *redis.Client) *Registry {
 	return &Registry{
-		client: client,
+		redis: redis,
 	}
 }
 
@@ -84,15 +85,15 @@ func (s *Registry) unregister() {
 	for name, address := range s.services {
 		keys = append(keys, fullKey(name, address))
 	}
-	s.client.Del(keys...)
-	s.client.Publish(Prefix, "unregister")
+	s.redis.Del(context.Background(), keys...)
+	s.redis.Publish(context.Background(), Prefix, "unregister")
 }
 
 func (s *Registry) refresh() {
 	log.Trace("refresh")
 	var keys []string
-	scan := s.client.Scan(0, Prefix+":*", 100)
-	for i := scan.Iterator(); i.Next(); {
+	scan := s.redis.Scan(context.Background(), 0, Prefix+":*", 100)
+	for i := scan.Iterator(); i.Next(context.Background()); {
 		keys = append(keys, i.Val())
 	}
 	if err := scan.Err(); err != nil {
@@ -134,13 +135,13 @@ func (s *Registry) AddCallback(cb func()) {
 func (s *Registry) run() {
 	log.Debug("run")
 	published := false
-	sub := s.client.Subscribe(Prefix)
+	sub := s.redis.Subscribe(context.Background(), Prefix)
 	for {
 		if len(s.services) > 0 && atomic.LoadInt32(&s.stopped) == 0 {
-			_, _ = s.client.Pipelined(func(p redis.Pipeliner) error {
+			_, _ = s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
 				for name, addr := range s.services {
 					key := fullKey(name, addr)
-					p.Set(key, "", TTL)
+					p.Set(context.Background(), key, "", TTL)
 				}
 				return nil
 			})
@@ -151,11 +152,11 @@ func (s *Registry) run() {
 			if !published {
 				published = true
 				log.Info("publish ", s.services)
-				s.client.Publish(Prefix, "register")
+				s.redis.Publish(context.Background(), Prefix, "register")
 			}
 		}
 		s.refresh()
-		if m, err := sub.ReceiveTimeout(RefreshInterval); err != nil {
+		if m, err := sub.ReceiveTimeout(context.Background(), RefreshInterval); err != nil {
 			if err, ok := err.(net.Error); ok && err.Timeout() {
 				log.Trace(err)
 			} else {

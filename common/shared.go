@@ -2,7 +2,7 @@ package common
 
 import (
 	"github.com/apache/thrift/lib/go/thrift"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v9"
 	"github.com/tzongw/registry/base"
 	"github.com/tzongw/registry/gen-go/service"
 )
