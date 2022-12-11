@@ -134,25 +134,31 @@ func (s *Registry) AddCallback(cb func()) {
 
 func (s *Registry) run() {
 	log.Debug("run")
-	published := false
 	sub := s.redis.Subscribe(context.Background(), Prefix)
 	for {
 		if len(s.services) > 0 && atomic.LoadInt32(&s.stopped) == 0 {
-			_, _ = s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
+			cmds, _ := s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
+				args := redis.SetArgs{
+					Get: true,
+					TTL: TTL,
+				}
 				for name, addr := range s.services {
 					key := fullKey(name, addr)
-					p.Set(context.Background(), key, "", TTL)
+					p.SetArgs(context.Background(), key, "", args)
 				}
 				return nil
 			})
 			if atomic.LoadInt32(&s.stopped) == 1 { // race
 				s.unregister()
-				return
-			}
-			if !published {
-				published = true
-				log.Info("publish ", s.services)
-				s.redis.Publish(context.Background(), Prefix, "register")
+			} else {
+				for _, cmd := range cmds {
+					statusCmd := cmd.(*redis.StatusCmd)
+					if _, err := statusCmd.Result(); err == redis.Nil {
+						log.Info("publish ", s.services)
+						s.redis.Publish(context.Background(), Prefix, "register")
+						break
+					}
+				}
 			}
 		}
 		s.refresh()
