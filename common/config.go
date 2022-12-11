@@ -2,4 +2,4 @@ package common
 
 import "flag"
 
-var redisAddr = flag.String("redis", "localhost:6479", "redis address")
+var redisAddr = flag.String("redis", "localhost:6379", "redis address")
