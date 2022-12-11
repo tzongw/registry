@@ -85,11 +85,23 @@ func (c *client) Serve() {
 			log.Debug(err)
 			return
 		}
+		addr, err := common.UserClient.Addr(c.id)
+		if err != nil {
+			log.Errorf("service not available %+v", err)
+			return
+		}
+		ctx := base.WithNode(addr)
 		switch mType {
 		case websocket.BinaryMessage:
-			_ = common.UserClient.RecvBinary(base.RandomCtx, rpcAddr, c.id, c.context(), message)
+			if err = common.UserClient.RecvBinary(ctx, rpcAddr, c.id, c.context(), message); err != nil {
+				log.Errorf("service not available %+v", err)
+				return
+			}
 		case websocket.TextMessage:
-			_ = common.UserClient.RecvText(base.RandomCtx, rpcAddr, c.id, c.context(), string(message))
+			if err = common.UserClient.RecvText(ctx, rpcAddr, c.id, c.context(), string(message)); err != nil {
+				log.Errorf("service not available %+v", err)
+				return
+			}
 		default:
 			log.Errorf("unknown message %+v, %+v", mType, message)
 		}
@@ -157,7 +169,16 @@ func (c *client) sendMessage(msg *message) {
 
 func (c *client) ping() {
 	c.sendMessage(pingMessage)
-	_ = common.UserClient.Ping(base.RandomCtx, rpcAddr, c.id, c.context())
+	addr, err := common.UserClient.Addr(c.id)
+	if err != nil {
+		log.Errorf("service not available %+v", err)
+		return
+	}
+	ctx := base.WithNode(addr)
+	if err = common.UserClient.Ping(ctx, rpcAddr, c.id, c.context()); err != nil {
+		log.Errorf("service not available %+v", err)
+		return
+	}
 }
 
 func (c *client) writeOne(m *message) bool {

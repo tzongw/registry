@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/apache/thrift/lib/go/thrift"
 	log "github.com/sirupsen/logrus"
+	"hash/fnv"
 	"math/rand"
 	"sort"
 	"sync"
@@ -168,11 +169,33 @@ func WithNode(addr string) context.Context {
 	return context.WithValue(context.Background(), selector, addr)
 }
 
-func (c *ServiceClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
+func (c *ServiceClient) preferredAddresses() sort.StringSlice {
 	addresses := c.registry.Addresses(c.service)
-	if len(addresses) == 0 {
-		return ErrUnavailable
+	c.m.Lock()
+	if len(c.localAddresses) > 0 {
+		addresses = c.localAddresses
+	} else if len(c.goodAddresses) > 0 {
+		addresses = c.goodAddresses
 	}
+	c.m.Unlock()
+	return addresses
+}
+
+func (c *ServiceClient) Addr(hint string) (addr string, err error) {
+	addresses := c.preferredAddresses()
+	if len(addresses) == 0 {
+		err = ErrUnavailable
+		return
+	}
+	h := fnv.New32a()
+	if _, err = h.Write([]byte(hint)); err != nil {
+		return
+	}
+	addr = addresses[h.Sum32()%uint32(len(addresses))]
+	return
+}
+
+func (c *ServiceClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
 	if v := ctx.Value(selector); v != nil {
 		if addr, ok := v.(string); ok {
 			client := c.client(addr)
@@ -186,6 +209,7 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 				panic("broadcast MUST be oneway")
 			}
 			var err error
+			addresses := c.registry.Addresses(c.service)
 			for _, addr := range addresses {
 				client := c.client(addr)
 				e := client.Call(ctx, method, args, result)
@@ -197,13 +221,10 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 			return err
 		}
 	} else {
-		c.m.Lock()
-		if len(c.localAddresses) > 0 {
-			addresses = c.localAddresses
-		} else if len(c.goodAddresses) > 0 {
-			addresses = c.goodAddresses
+		addresses := c.preferredAddresses()
+		if len(addresses) == 0 {
+			return ErrUnavailable
 		}
-		c.m.Unlock()
 		i := rand.Intn(len(addresses))
 		addr := addresses[i]
 		client := c.client(addr)
