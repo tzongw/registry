@@ -120,7 +120,7 @@ func (s *Registry) refresh() {
 		s.serviceMap.Store(sm)
 		s.m.Lock()
 		for _, cb := range s.afterRefresh {
-			cb()
+			go cb()
 		}
 		s.m.Unlock()
 	}
@@ -164,7 +164,7 @@ func (s *Registry) run() {
 		s.refresh()
 		if m, err := sub.ReceiveTimeout(context.Background(), RefreshInterval); err != nil {
 			if err, ok := err.(net.Error); ok && err.Timeout() {
-				log.Trace(err)
+				continue
 			} else {
 				log.Error(err)
 				time.Sleep(RefreshInterval)
