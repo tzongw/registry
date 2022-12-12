@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
@@ -44,7 +45,7 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	for k := range query {
 		params[k] = query.Get(k)
 	}
-	err = common.UserClient.Login(base.RandomCtx, rpcAddr, connId, params)
+	err = common.UserClient.Login(context.Background(), rpcAddr, connId, params)
 	if err != nil {
 		log.Error(err)
 		return

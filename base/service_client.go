@@ -157,8 +157,6 @@ func (c *ServiceClient) addCoolDown(addr string) {
 	}
 }
 
-var RandomCtx = context.Background()
-
 type tNodeSelector int
 
 var selector any = tNodeSelector(0)

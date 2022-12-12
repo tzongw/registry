@@ -70,7 +70,7 @@ func (c *client) Serve() {
 		log.Debug("serve stop ", c)
 		timer.Stop()
 		c.Stop()
-		_ = common.UserClient.Disconnect(base.RandomCtx, rpcAddr, c.id, c.context())
+		_ = common.UserClient.Disconnect(context.Background(), rpcAddr, c.id, c.context())
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 	h := c.conn.PongHandler()
