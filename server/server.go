@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"sync"
@@ -90,7 +91,7 @@ func (c *client) Serve() {
 			log.Errorf("service not available %+v", err)
 			return
 		}
-		ctx := base.WithNode(addr)
+		ctx := base.WithNode(context.Background(), addr)
 		switch mType {
 		case websocket.BinaryMessage:
 			if err = common.UserClient.RecvBinary(ctx, rpcAddr, c.id, c.context(), message); err != nil {
@@ -174,7 +175,7 @@ func (c *client) ping() {
 		log.Errorf("service not available %+v", err)
 		return
 	}
-	ctx := base.WithNode(addr)
+	ctx := base.WithNode(context.Background(), addr)
 	if err = common.UserClient.Ping(ctx, rpcAddr, c.id, c.context()); err != nil {
 		log.Errorf("service not available %+v", err)
 		return

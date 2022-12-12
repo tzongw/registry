@@ -163,10 +163,13 @@ type tNodeSelector int
 
 var selector any = tNodeSelector(0)
 var broadcast = 0
-var BroadcastCtx = context.WithValue(context.Background(), selector, broadcast)
 
-func WithNode(addr string) context.Context {
-	return context.WithValue(context.Background(), selector, addr)
+func WithNode(ctx context.Context, addr string) context.Context {
+	return context.WithValue(ctx, selector, addr)
+}
+
+func Broadcast(ctx context.Context) context.Context {
+	return context.WithValue(ctx, selector, broadcast)
 }
 
 func (c *ServiceClient) preferredAddresses() sort.StringSlice {
