@@ -9,6 +9,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -36,5 +37,8 @@ func main() {
 	<-ch
 	common.Registry.Stop()
 	time.Sleep(time.Second) // wait requests done
+	if strings.HasPrefix(*addr, "/") {
+		_ = os.Remove(*addr)
+	}
 	log.Info("exit")
 }
