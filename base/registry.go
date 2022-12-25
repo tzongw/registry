@@ -25,7 +25,7 @@ type ServiceMap map[string]sort.StringSlice
 
 type Registry struct {
 	services     map[string]string
-	serviceMap   atomic.Value
+	serviceMap   ServiceMap
 	redis        *redis.Client
 	stopped      int32
 	m            sync.Mutex
@@ -69,11 +69,9 @@ func (s *Registry) Stop() {
 }
 
 func (s *Registry) Addresses(name string) sort.StringSlice {
-	m, ok := s.serviceMap.Load().(ServiceMap)
-	if !ok {
-		return nil
-	}
-	return m[name]
+	s.m.Lock()
+	defer s.m.Unlock()
+	return s.serviceMap[name]
 }
 
 func (s *Registry) unregister() {
@@ -115,14 +113,14 @@ func (s *Registry) refresh() {
 			sm[name] = append(sm[name], address)
 		}
 	}
-	if m := s.serviceMap.Load(); !reflect.DeepEqual(m, sm) {
-		log.Infof("update %+v -> %+v", m, sm)
-		s.serviceMap.Store(sm)
-		s.m.Lock()
+	s.m.Lock()
+	defer s.m.Unlock()
+	if !reflect.DeepEqual(sm, s.serviceMap) {
+		log.Infof("update %+v -> %+v", s.serviceMap, sm)
+		s.serviceMap = sm
 		for _, cb := range s.afterRefresh {
 			go cb()
 		}
-		s.m.Unlock()
 	}
 }
 
