@@ -160,26 +160,25 @@ func (c *ServiceClient) addCoolDown(addr string) {
 type tNodeSelector int
 
 var selector any = tNodeSelector(0)
-var broadcast = 0
 
 func WithNode(ctx context.Context, addr string) context.Context {
 	return context.WithValue(ctx, selector, addr)
 }
 
 func Broadcast(ctx context.Context) context.Context {
-	return context.WithValue(ctx, selector, broadcast)
+	return context.WithValue(ctx, selector, 0)
 }
 
 func (c *ServiceClient) preferredAddresses() sort.StringSlice {
-	addresses := c.registry.Addresses(c.service)
 	c.m.Lock()
+	defer c.m.Unlock()
 	if len(c.localAddresses) > 0 {
-		addresses = c.localAddresses
-	} else if len(c.goodAddresses) > 0 {
-		addresses = c.goodAddresses
+		return c.localAddresses
 	}
-	c.m.Unlock()
-	return addresses
+	if len(c.goodAddresses) > 0 {
+		return c.goodAddresses
+	}
+	return c.registry.Addresses(c.service)
 }
 
 func (c *ServiceClient) Addr(hint string) (addr string, err error) {
