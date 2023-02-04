@@ -87,7 +87,6 @@ func (p *Pool[T]) Get() (*T, error) {
 		case i := <-p.idleC:
 			return i, nil
 		case <-t.C:
-			log.Warnf("timeout %d", p.opt.WaitTimeout)
 			return nil, ErrTimeout
 		}
 	} else {
