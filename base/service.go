@@ -8,6 +8,7 @@ import (
 	"hash/fnv"
 	"math/rand"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -162,11 +163,15 @@ type tNodeSelector int
 var selector any = tNodeSelector(0)
 
 func WithNode(ctx context.Context, addr string) context.Context {
-	return context.WithValue(ctx, selector, addr)
+	return context.WithValue(ctx, selector, "node:"+addr)
+}
+
+func WithHint(ctx context.Context, hint string) context.Context {
+	return context.WithValue(ctx, selector, "hint:"+hint)
 }
 
 func Broadcast(ctx context.Context) context.Context {
-	return context.WithValue(ctx, selector, 0)
+	return context.WithValue(ctx, selector, "broadcast")
 }
 
 func (c *ServiceClient) preferredAddresses() sort.StringSlice {
@@ -181,30 +186,11 @@ func (c *ServiceClient) preferredAddresses() sort.StringSlice {
 	return c.registry.Addresses(c.service)
 }
 
-func (c *ServiceClient) Addr(hint string) (addr string, err error) {
-	addresses := c.preferredAddresses()
-	if len(addresses) == 0 {
-		err = ErrUnavailable
-		return
-	}
-	h := fnv.New32a()
-	if _, err = h.Write([]byte(hint)); err != nil {
-		return
-	}
-	addr = addresses[h.Sum32()%uint32(len(addresses))]
-	return
-}
-
 func (c *ServiceClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
+	value := "random"
 	if v := ctx.Value(selector); v != nil {
-		if addr, ok := v.(string); ok {
-			client := c.client(addr)
-			err := client.Call(ctx, method, args, result)
-			if err != nil {
-				c.addCoolDown(addr)
-			}
-			return err
-		} else {
+		value = v.(string)
+		if value == "broadcast" {
 			if result != nil {
 				panic("broadcast MUST be oneway")
 			}
@@ -220,20 +206,35 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 			}
 			return err
 		}
+	}
+	var addr string
+	if strings.HasPrefix(value, "node:") {
+		addr = value[5:]
 	} else {
 		addresses := c.preferredAddresses()
 		if len(addresses) == 0 {
 			return ErrUnavailable
 		}
-		i := rand.Intn(len(addresses))
-		addr := addresses[i]
-		client := c.client(addr)
-		err := client.Call(ctx, method, args, result)
-		if err != nil {
-			c.addCoolDown(addr)
+		if strings.HasPrefix(value, "hint:") {
+			h := fnv.New32a()
+			hint := value[5:]
+			if _, err := h.Write([]byte(hint)); err != nil {
+				return err
+			}
+			addr = addresses[h.Sum32()%uint32(len(addresses))]
+		} else if value == "random" {
+			i := rand.Intn(len(addresses))
+			addr = addresses[i]
+		} else {
+			panic("UNKNOWN value: " + value)
 		}
-		return err
 	}
+	client := c.client(addr)
+	err := client.Call(ctx, method, args, result)
+	if err != nil {
+		c.addCoolDown(addr)
+	}
+	return err
 }
 
 func (c *ServiceClient) client(addr string) *AddrClient {

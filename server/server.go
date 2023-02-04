@@ -86,12 +86,7 @@ func (c *client) Serve() {
 			log.Debug(err)
 			return
 		}
-		addr, err := common.UserClient.Addr(c.id)
-		if err != nil {
-			log.Errorf("service not available %+v", err)
-			return
-		}
-		ctx := base.WithNode(context.Background(), addr)
+		ctx := base.WithHint(context.Background(), c.id)
 		switch mType {
 		case websocket.BinaryMessage:
 			if err = common.UserClient.RecvBinary(ctx, rpcAddr, c.id, c.context(), message); err != nil {
@@ -170,13 +165,8 @@ func (c *client) sendMessage(msg *message) {
 
 func (c *client) ping() {
 	c.sendMessage(pingMessage)
-	addr, err := common.UserClient.Addr(c.id)
-	if err != nil {
-		log.Errorf("service not available %+v", err)
-		return
-	}
-	ctx := base.WithNode(context.Background(), addr)
-	if err = common.UserClient.Ping(ctx, rpcAddr, c.id, c.context()); err != nil {
+	ctx := base.WithHint(context.Background(), c.id)
+	if err := common.UserClient.Ping(ctx, rpcAddr, c.id, c.context()); err != nil {
 		log.Errorf("service not available %+v", err)
 		return
 	}
