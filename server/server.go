@@ -34,10 +34,12 @@ func findClient(connId string) (*client, error) {
 }
 
 type message struct {
-	typ     int
-	content []byte
+	typ        int
+	recyclable bool
+	content    []byte
 }
 
+var messagePool = sync.Pool{New: func() any { return &message{recyclable: true} }}
 var pingMessage = &message{typ: websocket.PingMessage}
 
 type client struct {
@@ -134,11 +136,17 @@ func (c *client) UnsetContext(key string, value string) {
 }
 
 func (c *client) SendText(content string) {
-	c.sendMessage(&message{typ: websocket.TextMessage, content: []byte(content)})
+	var msg = messagePool.Get().(*message)
+	msg.typ = websocket.TextMessage
+	msg.content = []byte(content)
+	c.sendMessage(msg)
 }
 
 func (c *client) SendBinary(content []byte) {
-	c.sendMessage(&message{typ: websocket.BinaryMessage, content: content})
+	var msg = messagePool.Get().(*message)
+	msg.typ = websocket.BinaryMessage
+	msg.content = content
+	c.sendMessage(msg)
 }
 
 func (c *client) sendMessage(msg *message) {
@@ -172,8 +180,8 @@ func (c *client) ping() {
 	}
 }
 
-func (c *client) writeOne(m *message) bool {
-	if m == nil {
+func (c *client) writeOne(msg *message) bool {
+	if msg == nil {
 		log.Debug("stopped ", c)
 		_ = c.conn.Close()
 		return false
@@ -190,7 +198,10 @@ func (c *client) writeOne(m *message) bool {
 	}
 	c.mu.Unlock()
 	_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-	if err := c.conn.WriteMessage(m.typ, m.content); err != nil {
+	if msg.recyclable {
+		defer messagePool.Put(msg)
+	}
+	if err := c.conn.WriteMessage(msg.typ, msg.content); err != nil {
 		log.Infof("write error %+v %+v", err, c)
 		_ = c.conn.Close()
 		return false
