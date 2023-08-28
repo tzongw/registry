@@ -45,11 +45,7 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	for k := range query {
 		params[k] = query.Get(k)
 	}
-	err = common.UserClient.Login(context.Background(), rpcAddr, connId, params)
-	if err != nil {
-		log.Error(err)
-		return
-	}
+	_ = common.UserClient.Login(context.Background(), rpcAddr, connId, params)
 	client.Serve()
 }
 
