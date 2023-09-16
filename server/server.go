@@ -17,9 +17,10 @@ const (
 	readWait       = 3 * common.PingInterval
 	writeWait      = time.Second
 	maxMessageSize = 100 * 1024
+	groupShards    = 16
 )
 
-var clients sync.Map
+var clients = base.NewMap[string, *client](128)
 var clientCount int64
 var timerPool sync.Pool
 
@@ -30,7 +31,7 @@ func findClient(connId string) (*client, error) {
 	if !ok {
 		return nil, errNotExist
 	}
-	return v.(*client), nil
+	return v, nil
 }
 
 type message struct {
@@ -263,12 +264,7 @@ func (c *client) shortWrite() {
 	}
 }
 
-type groupInfo struct {
-	clients sync.Map // broadcast can iterate without lock
-	count   int
-}
-
-var groups = make(map[string]*groupInfo)
+var groups = make(map[string]*base.Map[string, *client])
 var groupsMutex sync.Mutex
 
 var errAlreadyInGroup = errors.New("already in group")
@@ -285,17 +281,16 @@ func joinGroup(connId, group string) error {
 		return errAlreadyInGroup // maybe join multi times
 	}
 	if c.groups == nil {
-		c.groups = make(map[string]struct{})
+		c.groups = make(map[string]struct{}, 1)
 	}
 	c.groups[group] = struct{}{}
 	g, ok := groups[group]
 	if !ok {
-		g = &groupInfo{}
+		g = base.NewMap[string, *client](groupShards)
 		groups[group] = g
 		log.Debugf("create group %+v, groups: %d", group, len(groups))
 	}
-	g.clients.Store(c, nil)
-	g.count++
+	g.Store(connId, c)
 	return nil
 }
 
@@ -317,9 +312,8 @@ func leaveGroup(connId, group string) error {
 // ONLY use by leaveGroup & cleanClient; c MUST in group
 func removeFromGroup(c *client, group string) {
 	g := groups[group]
-	g.clients.Delete(c)
-	g.count--
-	if g.count == 0 {
+	g.Delete(c.id)
+	if g.Count() == 0 {
 		delete(groups, group)
 		log.Debugf("delete group %+v, groups: %d", group, len(groups))
 	}
@@ -340,9 +334,7 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 	if !ok {
 		return
 	}
-	// this may take a while
-	go g.clients.Range(func(key, _ any) bool {
-		c := key.(*client)
+	g.Range(func(_ string, c *client) bool {
 		if !base.Contains(exclude, c.id) {
 			c.sendMessage(msg)
 		}
