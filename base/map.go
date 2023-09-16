@@ -78,6 +78,7 @@ func (m *Map[K, V]) Range(f func(k K, v V) bool) {
 		shard.mu.Lock()
 		for k, v := range shard.m {
 			if !f(k, v) {
+				shard.mu.Unlock()
 				return
 			}
 		}
