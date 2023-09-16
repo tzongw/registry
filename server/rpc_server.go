@@ -101,7 +101,7 @@ func RpcServe() (addr string) {
 	processor := service.NewGateProcessor(handler)
 	server := thrift.NewTSimpleServer4(processor, transport, transportFactory, protocolFactory)
 	go func() {
-		if err := server.Serve(); err != nil {
+		if err := server.AcceptLoop(); err != nil {
 			log.Fatal(err)
 		}
 	}()
