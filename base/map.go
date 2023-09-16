@@ -25,7 +25,7 @@ func stringHash(x string) int {
 
 type Shard[K comparable, V any] struct {
 	m  map[K]V
-	mu sync.Mutex
+	mu sync.RWMutex
 }
 
 type Map[K comparable, V any] struct {
@@ -75,24 +75,24 @@ func (m *Map[K, V]) Range(f func(k K, v V) bool) {
 			runtime.Gosched()
 		}
 		shard := &m.shards[i]
-		shard.mu.Lock()
+		shard.mu.RLock()
 		for k, v := range shard.m {
 			if !f(k, v) {
-				shard.mu.Unlock()
+				shard.mu.RUnlock()
 				return
 			}
 		}
 		done += len(shard.m)
-		shard.mu.Unlock()
+		shard.mu.RUnlock()
 	}
 }
 
 func (m *Map[K, V]) Count() (count int) {
 	for i := 0; i < len(m.shards); i++ {
 		shard := &m.shards[i]
-		shard.mu.Lock()
+		shard.mu.RLock()
 		count += len(shard.m)
-		shard.mu.Unlock()
+		shard.mu.RUnlock()
 	}
 	return
 }
