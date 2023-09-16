@@ -22,61 +22,69 @@ func stringHash(x string) int {
 	return int(h.Sum32())
 }
 
-type shard[K comparable, V any] struct {
+type Shard[K comparable, V any] struct {
 	m  map[K]V
 	mu sync.Mutex
 }
 
 type Map[K comparable, V any] struct {
-	shards []shard[K, V]
+	shards []Shard[K, V]
 }
 
 func NewMap[K comparable, V any](shards int) *Map[K, V] {
-	return &Map[K, V]{shards: make([]shard[K, V], shards, shards)}
+	return &Map[K, V]{shards: make([]Shard[K, V], shards, shards)}
 }
 
 func (m *Map[K, V]) Store(k K, v V) {
 	i := Hash(k) % len(m.shards)
-	m.shards[i].mu.Lock()
-	if m.shards[i].m == nil {
-		m.shards[i].m = make(map[K]V, len(m.shards))
+	shard := &m.shards[i]
+	shard.mu.Lock()
+	if shard.m == nil {
+		shard.m = make(map[K]V, len(m.shards))
 	}
-	m.shards[i].m[k] = v
-	m.shards[i].mu.Unlock()
+	shard.m[k] = v
+	shard.mu.Unlock()
 }
 
 func (m *Map[K, V]) Load(k K) (v V, ok bool) {
 	i := Hash(k) % len(m.shards)
-	m.shards[i].mu.Lock()
-	v, ok = m.shards[i].m[k]
-	m.shards[i].mu.Unlock()
+	shard := &m.shards[i]
+	shard.mu.Lock()
+	v, ok = shard.m[k]
+	shard.mu.Unlock()
 	return
 }
 
 func (m *Map[K, V]) Delete(k K) {
 	i := Hash(k) % len(m.shards)
-	m.shards[i].mu.Lock()
-	delete(m.shards[i].m, k)
-	m.shards[i].mu.Unlock()
+	shard := &m.shards[i]
+	shard.mu.Lock()
+	delete(shard.m, k)
+	if len(shard.m) == 0 {
+		shard.m = nil
+	}
+	shard.mu.Unlock()
 }
 
 func (m *Map[K, V]) Range(f func(k K, v V) bool) {
 	for i := 0; i < len(m.shards); i++ {
-		m.shards[i].mu.Lock()
-		for k, v := range m.shards[i].m {
+		shard := &m.shards[i]
+		shard.mu.Lock()
+		for k, v := range shard.m {
 			if !f(k, v) {
 				return
 			}
 		}
-		m.shards[i].mu.Unlock()
+		shard.mu.Unlock()
 	}
 }
 
 func (m *Map[K, V]) Count() (count int) {
 	for i := 0; i < len(m.shards); i++ {
-		m.shards[i].mu.Lock()
-		count += len(m.shards[i].m)
-		m.shards[i].mu.Unlock()
+		shard := &m.shards[i]
+		shard.mu.Lock()
+		count += len(shard.m)
+		shard.mu.Unlock()
 	}
 	return
 }
