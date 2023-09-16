@@ -20,13 +20,13 @@ const (
 	groupShards    = 16
 )
 
-var clients = base.NewMap[string, *client](128)
+var clients = base.NewMap[string, *Client](128)
 var clientCount int64
 var timerPool sync.Pool
 
 var errNotExist = errors.New("not exist")
 
-func findClient(connId string) (*client, error) {
+func findClient(connId string) (*Client, error) {
 	v, ok := clients.Load(connId)
 	if !ok {
 		return nil, errNotExist
@@ -43,7 +43,7 @@ type message struct {
 var messagePool = sync.Pool{New: func() any { return &message{recyclable: true} }}
 var pingMessage = &message{typ: websocket.PingMessage}
 
-type client struct {
+type Client struct {
 	id      string
 	conn    *websocket.Conn
 	ctx     map[string]string
@@ -54,19 +54,19 @@ type client struct {
 	groups  map[string]struct{} // protected by GLOBAL groupsMutex
 }
 
-func newClient(id string, conn *websocket.Conn) *client {
-	return &client{
+func newClient(id string, conn *websocket.Conn) *Client {
+	return &Client{
 		id:   id,
 		conn: conn,
 		ch:   make(chan *message, 1),
 	}
 }
 
-func (c *client) String() string {
+func (c *Client) String() string {
 	return c.id
 }
 
-func (c *client) Serve() {
+func (c *Client) Serve() {
 	log.Debug("serve start ", c)
 	timer := time.AfterFunc(common.PingInterval, c.ping)
 	defer func() {
@@ -107,25 +107,25 @@ func (c *client) Serve() {
 	}
 }
 
-func (c *client) Stop() {
+func (c *Client) Stop() {
 	// some msg may in backlog, can not close ch,  send nil msg as close
 	c.sendMessage(nil)
 }
 
-func (c *client) context() map[string]string {
+func (c *Client) context() map[string]string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.ctx
 }
 
-func (c *client) SetContext(key string, value string) {
+func (c *Client) SetContext(key string, value string) {
 	log.Debugf("%+v: %+v %+v", c, key, value)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.ctx = base.MergeMap(c.ctx, map[string]string{key: value}) // make a copy, DONT modify content
 }
 
-func (c *client) UnsetContext(key string, value string) {
+func (c *Client) UnsetContext(key string, value string) {
 	log.Debugf("%+v: %+v %+v", c, key, value)
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -136,21 +136,21 @@ func (c *client) UnsetContext(key string, value string) {
 	}
 }
 
-func (c *client) SendText(content string) {
+func (c *Client) SendText(content string) {
 	var msg = messagePool.Get().(*message)
 	msg.typ = websocket.TextMessage
 	msg.content = []byte(content)
 	c.sendMessage(msg)
 }
 
-func (c *client) SendBinary(content []byte) {
+func (c *Client) SendBinary(content []byte) {
 	var msg = messagePool.Get().(*message)
 	msg.typ = websocket.BinaryMessage
 	msg.content = content
 	c.sendMessage(msg)
 }
 
-func (c *client) sendMessage(msg *message) {
+func (c *Client) sendMessage(msg *message) {
 	c.mu.Lock()
 	if len(c.backlog) == 0 {
 		select {
@@ -172,7 +172,7 @@ func (c *client) sendMessage(msg *message) {
 	c.mu.Unlock()
 }
 
-func (c *client) ping() {
+func (c *Client) ping() {
 	c.sendMessage(pingMessage)
 	ctx := base.WithHint(context.Background(), c.id)
 	if err := common.UserClient.Ping(ctx, rpcAddr, c.id, c.context()); err != nil {
@@ -181,7 +181,7 @@ func (c *client) ping() {
 	}
 }
 
-func (c *client) writeOne(msg *message) bool {
+func (c *Client) writeOne(msg *message) bool {
 	if msg == nil {
 		log.Debug("stopped ", c)
 		_ = c.conn.Close()
@@ -210,7 +210,7 @@ func (c *client) writeOne(msg *message) bool {
 	return true
 }
 
-func (c *client) exitWrite() bool {
+func (c *Client) exitWrite() bool {
 	c.mu.Lock()
 	if len(c.ch) == 0 {
 		c.writing = false
@@ -221,7 +221,7 @@ func (c *client) exitWrite() bool {
 	return false
 }
 
-func (c *client) longWrite() {
+func (c *Client) longWrite() {
 	var t *time.Timer
 	idleWait := common.PingInterval/4 + time.Duration(rand.Int63n(int64(common.PingInterval/2)))
 	if v := timerPool.Get(); v != nil {
@@ -249,7 +249,7 @@ func (c *client) longWrite() {
 	}
 }
 
-func (c *client) shortWrite() {
+func (c *Client) shortWrite() {
 	for {
 		select {
 		case m := <-c.ch:
@@ -264,7 +264,7 @@ func (c *client) shortWrite() {
 	}
 }
 
-var groups = make(map[string]*base.Map[string, *client])
+var groups = make(map[string]*base.Map[string, *Client])
 var groupsMutex sync.Mutex
 
 var errAlreadyInGroup = errors.New("already in group")
@@ -286,7 +286,7 @@ func joinGroup(connId, group string) error {
 	c.groups[group] = struct{}{}
 	g, ok := groups[group]
 	if !ok {
-		g = base.NewMap[string, *client](groupShards)
+		g = base.NewMap[string, *Client](groupShards)
 		groups[group] = g
 		log.Debugf("create group %+v, groups: %d", group, len(groups))
 	}
@@ -310,7 +310,7 @@ func leaveGroup(connId, group string) error {
 }
 
 // ONLY use by leaveGroup & cleanClient; c MUST in group
-func removeFromGroup(c *client, group string) {
+func removeFromGroup(c *Client, group string) {
 	g := groups[group]
 	g.Delete(c.id)
 	if g.Count() == 0 {
@@ -334,7 +334,7 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 	if !ok {
 		return
 	}
-	g.Range(func(_ string, c *client) bool {
+	g.Range(func(_ string, c *Client) bool {
 		if !base.Contains(exclude, c.id) {
 			c.sendMessage(msg)
 		}
@@ -342,7 +342,7 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 	})
 }
 
-func cleanClient(c *client) {
+func cleanClient(c *Client) {
 	groupsMutex.Lock()
 	defer groupsMutex.Unlock()
 	clients.Delete(c.id) // join & leave no-op after this

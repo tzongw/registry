@@ -30,7 +30,7 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		_ = conn.Close()
 		cleanClient(client)
-		count := atomic.AddInt64(&clientCount, -1)
+		count = atomic.AddInt64(&clientCount, -1)
 		log.Debug("-- client count ", count)
 	}()
 	params := make(map[string]string)
