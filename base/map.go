@@ -2,6 +2,7 @@ package base
 
 import (
 	"hash/fnv"
+	"runtime"
 	"sync"
 )
 
@@ -40,7 +41,7 @@ func (m *Map[K, V]) Store(k K, v V) {
 	shard := &m.shards[i]
 	shard.mu.Lock()
 	if shard.m == nil {
-		shard.m = make(map[K]V, len(m.shards))
+		shard.m = make(map[K]V)
 	}
 	shard.m[k] = v
 	shard.mu.Unlock()
@@ -67,7 +68,12 @@ func (m *Map[K, V]) Delete(k K) {
 }
 
 func (m *Map[K, V]) Range(f func(k K, v V) bool) {
+	done := 0
 	for i := 0; i < len(m.shards); i++ {
+		if done >= 4096 {
+			done = 0
+			runtime.Gosched()
+		}
 		shard := &m.shards[i]
 		shard.mu.Lock()
 		for k, v := range shard.m {
@@ -75,6 +81,7 @@ func (m *Map[K, V]) Range(f func(k K, v V) bool) {
 				return
 			}
 		}
+		done += len(shard.m)
 		shard.mu.Unlock()
 	}
 }

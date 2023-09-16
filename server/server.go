@@ -281,7 +281,7 @@ func joinGroup(connId, group string) error {
 		return errAlreadyInGroup // maybe join multi times
 	}
 	if c.groups == nil {
-		c.groups = make(map[string]struct{}, 1)
+		c.groups = make(map[string]struct{})
 	}
 	c.groups[group] = struct{}{}
 	g, ok := groups[group]
@@ -334,7 +334,7 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 	if !ok {
 		return
 	}
-	g.Range(func(_ string, c *Client) bool {
+	go g.Range(func(_ string, c *Client) bool {
 		if !base.Contains(exclude, c.id) {
 			c.sendMessage(msg)
 		}
