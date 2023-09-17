@@ -27,7 +27,7 @@ type Registry struct {
 	services     map[string]string
 	serviceMap   ServiceMap
 	redis        *redis.Client
-	stopped      int32
+	stopped      atomic.Bool
 	m            sync.Mutex
 	afterRefresh []func()
 }
@@ -64,7 +64,7 @@ func (s *Registry) Start(services map[string]string) {
 
 func (s *Registry) Stop() {
 	log.Info("stop")
-	atomic.StoreInt32(&s.stopped, 1)
+	s.stopped.Store(true)
 	s.unregister()
 }
 
@@ -134,7 +134,7 @@ func (s *Registry) run() {
 	log.Debug("run")
 	sub := s.redis.Subscribe(context.Background(), Prefix)
 	for {
-		if len(s.services) > 0 && atomic.LoadInt32(&s.stopped) == 0 {
+		if len(s.services) > 0 && !s.stopped.Load() {
 			cmds, _ := s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
 				args := redis.SetArgs{
 					Get: true,
@@ -146,7 +146,7 @@ func (s *Registry) run() {
 				}
 				return nil
 			})
-			if atomic.LoadInt32(&s.stopped) == 1 { // race
+			if s.stopped.Load() { // race
 				s.unregister()
 			} else {
 				for _, cmd := range cmds {

@@ -31,7 +31,7 @@ type Shard[K comparable, V any] struct {
 
 type Map[K comparable, V any] struct {
 	shards []Shard[K, V]
-	size   int64
+	size   atomic.Int64
 }
 
 func NewMap[K comparable, V any](shards int) *Map[K, V] {
@@ -43,7 +43,7 @@ func (m *Map[K, V]) Store(k K, v V) {
 	shard := &m.shards[i]
 	shard.mu.Lock()
 	if _, ok := shard.m[k]; !ok {
-		atomic.AddInt64(&m.size, 1)
+		m.size.Add(1)
 	}
 	if shard.m == nil {
 		shard.m = make(map[K]V)
@@ -57,7 +57,7 @@ func (m *Map[K, V]) Delete(k K) {
 	shard := &m.shards[i]
 	shard.mu.Lock()
 	if _, ok := shard.m[k]; ok {
-		atomic.AddInt64(&m.size, -1)
+		m.size.Add(-1)
 	}
 	delete(shard.m, k)
 	if len(shard.m) == 0 {
@@ -96,5 +96,5 @@ func (m *Map[K, V]) Range(f func(k K, v V) bool) {
 }
 
 func (m *Map[K, V]) Size() int64 {
-	return atomic.LoadInt64(&m.size)
+	return m.size.Load()
 }

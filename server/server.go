@@ -22,7 +22,7 @@ const (
 )
 
 var clients = base.NewMap[string, *Client](128)
-var clientCount int64
+var clientCount atomic.Int64
 var timerPool sync.Pool
 
 var errNotExist = errors.New("not exist")
@@ -53,7 +53,7 @@ type Client struct {
 	backlog []*message
 	writing bool                // write goroutine is running
 	groups  map[string]struct{} // protected by GLOBAL groupsMutex
-	step    int32               // ping step
+	step    atomic.Int32        // ping step
 }
 
 func newClient(id string, conn *websocket.Conn) *Client {
@@ -176,10 +176,10 @@ func (c *Client) sendMessage(msg *message) {
 
 func (c *Client) ping() {
 	c.sendMessage(pingMessage)
-	if atomic.AddInt32(&c.step, 1) < common.RpcPingStep {
+	if c.step.Add(1) < common.RpcPingStep {
 		return
 	}
-	atomic.StoreInt32(&c.step, 0)
+	c.step.Store(0)
 	ctx := base.WithHint(context.Background(), c.id)
 	if err := common.UserClient.Ping(ctx, rpcAddr, c.id, c.context()); err != nil {
 		log.Errorf("service not available %+v", err)
