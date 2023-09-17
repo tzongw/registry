@@ -19,14 +19,14 @@ func init() {
 	addr := conn.LocalAddr().String()
 	ss := strings.SplitN(addr, ":", 2)
 	LocalIP = ss[0]
-	conn.Close()
+	_ = conn.Close()
 }
 
 // Extract returns a real ip
-func Extract(addr string) (string, error) {
-	// if addr specified then its returned
-	if len(addr) > 0 && (addr != "0.0.0.0" && addr != "[::]" && addr != "::") {
-		return addr, nil
+func Extract(host string) (string, error) {
+	// if host specified then its returned
+	if len(host) > 0 && host != "0.0.0.0" && host != "[::]" && host != "::" {
+		return host, nil
 	}
 
 	return LocalIP, nil
