@@ -24,13 +24,11 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	connId := uuid.New().String()
 	client := newClient(connId, conn)
 	clients.Store(connId, client)
-	count := clientCount.Add(1)
-	log.Debug("++ client count ", count)
+	log.Debug("++ client count ", clients.Size())
 	defer func() {
 		_ = conn.Close()
 		cleanClient(client)
-		count = clientCount.Add(-1)
-		log.Debug("-- client count ", count)
+		log.Debug("-- client count ", clients.Size())
 	}()
 	params := make(map[string]string)
 	for k := range r.Header {

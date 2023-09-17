@@ -22,7 +22,6 @@ const (
 )
 
 var clients = base.NewMap[string, *Client](128)
-var clientCount atomic.Int64
 var timerPool sync.Pool
 
 var errNotExist = errors.New("not exist")
