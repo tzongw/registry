@@ -47,15 +47,6 @@ func (m *Map[K, V]) Store(k K, v V) {
 	shard.mu.Unlock()
 }
 
-func (m *Map[K, V]) Load(k K) (v V, ok bool) {
-	i := Hash(k) % len(m.shards)
-	shard := &m.shards[i]
-	shard.mu.Lock()
-	v, ok = shard.m[k]
-	shard.mu.Unlock()
-	return
-}
-
 func (m *Map[K, V]) Delete(k K) {
 	i := Hash(k) % len(m.shards)
 	shard := &m.shards[i]
@@ -65,6 +56,15 @@ func (m *Map[K, V]) Delete(k K) {
 		shard.m = nil
 	}
 	shard.mu.Unlock()
+}
+
+func (m *Map[K, V]) Load(k K) (v V, ok bool) {
+	i := Hash(k) % len(m.shards)
+	shard := &m.shards[i]
+	shard.mu.RLock()
+	v, ok = shard.m[k]
+	shard.mu.RUnlock()
+	return
 }
 
 func (m *Map[K, V]) Range(f func(k K, v V) bool) {
@@ -87,7 +87,7 @@ func (m *Map[K, V]) Range(f func(k K, v V) bool) {
 	}
 }
 
-func (m *Map[K, V]) Count() (count int) {
+func (m *Map[K, V]) Size() (count int) {
 	for i := 0; i < len(m.shards); i++ {
 		shard := &m.shards[i]
 		shard.mu.RLock()

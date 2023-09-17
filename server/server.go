@@ -319,7 +319,7 @@ func leaveGroup(connId, group string) error {
 func removeFromGroup(c *Client, group string) {
 	g := groups[group]
 	g.Delete(c.id)
-	if g.Count() == 0 {
+	if g.Size() == 0 {
 		delete(groups, group)
 		log.Debugf("delete group %+v, groups: %d", group, len(groups))
 	}
