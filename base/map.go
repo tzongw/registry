@@ -4,6 +4,7 @@ import (
 	"hash/fnv"
 	"runtime"
 	"sync"
+	"sync/atomic"
 )
 
 func Hash(x any) int {
@@ -30,6 +31,7 @@ type Shard[K comparable, V any] struct {
 
 type Map[K comparable, V any] struct {
 	shards []Shard[K, V]
+	size   int64
 }
 
 func NewMap[K comparable, V any](shards int) *Map[K, V] {
@@ -40,6 +42,9 @@ func (m *Map[K, V]) Store(k K, v V) {
 	i := Hash(k) % len(m.shards)
 	shard := &m.shards[i]
 	shard.mu.Lock()
+	if _, ok := shard.m[k]; !ok {
+		atomic.AddInt64(&m.size, 1)
+	}
 	if shard.m == nil {
 		shard.m = make(map[K]V)
 	}
@@ -51,6 +56,9 @@ func (m *Map[K, V]) Delete(k K) {
 	i := Hash(k) % len(m.shards)
 	shard := &m.shards[i]
 	shard.mu.Lock()
+	if _, ok := shard.m[k]; ok {
+		atomic.AddInt64(&m.size, -1)
+	}
 	delete(shard.m, k)
 	if len(shard.m) == 0 {
 		shard.m = nil
@@ -87,12 +95,6 @@ func (m *Map[K, V]) Range(f func(k K, v V) bool) {
 	}
 }
 
-func (m *Map[K, V]) Size() (count int) {
-	for i := 0; i < len(m.shards); i++ {
-		shard := &m.shards[i]
-		shard.mu.RLock()
-		count += len(shard.m)
-		shard.mu.RUnlock()
-	}
-	return
+func (m *Map[K, V]) Size() int64 {
+	return atomic.LoadInt64(&m.size)
 }
