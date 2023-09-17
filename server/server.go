@@ -86,25 +86,25 @@ func (c *Client) Serve() {
 	})
 	for {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
-		mType, message, err := c.conn.ReadMessage()
+		typ, content, err := c.conn.ReadMessage()
 		if err != nil {
 			log.Debug(err)
 			return
 		}
 		ctx := base.WithHint(context.Background(), c.id)
-		switch mType {
+		switch typ {
 		case websocket.BinaryMessage:
-			if err = common.UserClient.RecvBinary(ctx, rpcAddr, c.id, c.context(), message); err != nil {
+			if err = common.UserClient.RecvBinary(ctx, rpcAddr, c.id, c.context(), content); err != nil {
 				log.Errorf("service not available %+v", err)
 				return
 			}
 		case websocket.TextMessage:
-			if err = common.UserClient.RecvText(ctx, rpcAddr, c.id, c.context(), string(message)); err != nil {
+			if err = common.UserClient.RecvText(ctx, rpcAddr, c.id, c.context(), string(content)); err != nil {
 				log.Errorf("service not available %+v", err)
 				return
 			}
 		default:
-			log.Errorf("unknown message %+v, %+v", mType, message)
+			log.Errorf("unknown message %+v, %+v", typ, content)
 		}
 	}
 }
