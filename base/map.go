@@ -20,11 +20,7 @@ type Integer interface {
 	Signed | Unsigned
 }
 
-type Float interface {
-	~float32 | ~float64
-}
-
-func NumericHash[K Integer | Float](k K) uint {
+func IntegerHash[K Integer](k K) uint {
 	// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
 	x := uint(k)
 	x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9
@@ -40,7 +36,7 @@ func StringHash[K ~string](k K) uint {
 }
 
 func PointerHash[T any](k *T) uint {
-	return NumericHash(uintptr(unsafe.Pointer(k)))
+	return IntegerHash(uintptr(unsafe.Pointer(k)))
 }
 
 type Shard[K comparable, V any] struct {
