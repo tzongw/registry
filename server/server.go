@@ -21,7 +21,7 @@ const (
 	groupShards    = 16
 )
 
-var clients = base.NewMap[string, *Client](128)
+var clients = base.NewMap[string, *Client](base.StringHash[string], 128)
 var timerPool sync.Pool
 
 var errNotExist = errors.New("not exist")
@@ -291,7 +291,7 @@ func joinGroup(connId, group string) error {
 	c.groups[group] = struct{}{}
 	g, ok := groups[group]
 	if !ok {
-		g = base.NewMap[string, *Client](groupShards)
+		g = base.NewMap[string, *Client](base.StringHash[string], groupShards)
 		groups[group] = g
 		log.Debugf("create group %+v, groups: %d", group, len(groups))
 	}

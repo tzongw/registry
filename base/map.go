@@ -7,20 +7,29 @@ import (
 	"sync/atomic"
 )
 
-func Hash(x any) int {
-	switch v := x.(type) {
-	case int:
-		return v
-	case string:
-		return stringHash(v)
-	default:
-		panic("hash function of this type not implemented")
-	}
+type Signed interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64
 }
 
-func stringHash(x string) int {
+type Unsigned interface {
+	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
+}
+
+type Integer interface {
+	Signed | Unsigned
+}
+
+type Float interface {
+	~float32 | ~float64
+}
+
+func NumericHash[K Integer | Float](k K) int {
+	return int(k)
+}
+
+func StringHash[K ~string](k K) int {
 	h := fnv.New32a()
-	_, _ = h.Write([]byte(x))
+	_, _ = h.Write([]byte(k))
 	return int(h.Sum32())
 }
 
@@ -30,16 +39,17 @@ type Shard[K comparable, V any] struct {
 }
 
 type Map[K comparable, V any] struct {
+	hash   func(k K) int
 	shards []Shard[K, V]
 	size   atomic.Int64
 }
 
-func NewMap[K comparable, V any](shards int) *Map[K, V] {
-	return &Map[K, V]{shards: make([]Shard[K, V], shards, shards)}
+func NewMap[K comparable, V any](hash func(k K) int, shards int) *Map[K, V] {
+	return &Map[K, V]{hash: hash, shards: make([]Shard[K, V], shards, shards)}
 }
 
 func (m *Map[K, V]) Store(k K, v V) {
-	i := Hash(k) % len(m.shards)
+	i := m.hash(k) % len(m.shards)
 	shard := &m.shards[i]
 	shard.mu.Lock()
 	if _, ok := shard.m[k]; !ok {
@@ -53,7 +63,7 @@ func (m *Map[K, V]) Store(k K, v V) {
 }
 
 func (m *Map[K, V]) Delete(k K) {
-	i := Hash(k) % len(m.shards)
+	i := m.hash(k) % len(m.shards)
 	shard := &m.shards[i]
 	shard.mu.Lock()
 	if _, ok := shard.m[k]; ok {
@@ -67,7 +77,7 @@ func (m *Map[K, V]) Delete(k K) {
 }
 
 func (m *Map[K, V]) Load(k K) (v V, ok bool) {
-	i := Hash(k) % len(m.shards)
+	i := m.hash(k) % len(m.shards)
 	shard := &m.shards[i]
 	shard.mu.RLock()
 	v, ok = shard.m[k]
