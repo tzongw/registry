@@ -58,6 +58,7 @@ func (m *Map[K, V]) Store(k K, v V) {
 	i := m.hash(k) % uint(len(m.shards))
 	shard := &m.shards[i]
 	shard.mu.Lock()
+	defer shard.mu.Unlock()
 	if _, ok := shard.m[k]; !ok {
 		m.size.Add(1)
 	}
@@ -65,21 +66,21 @@ func (m *Map[K, V]) Store(k K, v V) {
 		shard.m = make(map[K]V)
 	}
 	shard.m[k] = v
-	shard.mu.Unlock()
 }
 
 func (m *Map[K, V]) Delete(k K) {
 	i := m.hash(k) % uint(len(m.shards))
 	shard := &m.shards[i]
 	shard.mu.Lock()
-	if _, ok := shard.m[k]; ok {
-		m.size.Add(-1)
+	defer shard.mu.Unlock()
+	if _, ok := shard.m[k]; !ok {
+		return
 	}
+	m.size.Add(-1)
 	delete(shard.m, k)
 	if len(shard.m) == 0 {
 		shard.m = nil
 	}
-	shard.mu.Unlock()
 }
 
 func (m *Map[K, V]) Load(k K) (v V, ok bool) {
