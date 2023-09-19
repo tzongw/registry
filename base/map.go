@@ -83,6 +83,28 @@ func (m *Map[K, V]) Delete(k K) {
 	}
 }
 
+func (m *Map[K, V]) CreateOrOperate(k K, create func() V, operate func(V) bool) {
+	i := m.hash(k) % uint(len(m.shards))
+	shard := &m.shards[i]
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+	if v, ok := shard.m[k]; ok {
+		if operate(v) {
+			delete(shard.m, k)
+			m.size.Add(-1)
+			if len(shard.m) == 0 {
+				shard.m = nil
+			}
+		}
+	} else {
+		if shard.m == nil {
+			shard.m = make(map[K]V)
+		}
+		shard.m[k] = create()
+		m.size.Add(1)
+	}
+}
+
 func (m *Map[K, V]) Load(k K) (v V, ok bool) {
 	i := m.hash(k) % uint(len(m.shards))
 	shard := &m.shards[i]

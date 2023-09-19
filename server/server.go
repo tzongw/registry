@@ -46,13 +46,14 @@ var pingMessage = &message{typ: websocket.PingMessage}
 type Client struct {
 	id      string
 	conn    *websocket.Conn
-	ctx     map[string]string
 	mu      sync.Mutex
+	ctx     map[string]string
+	groups  map[string]struct{}
 	ch      chan *message
 	backlog []*message
-	writing bool                // write goroutine is running
-	groups  map[string]struct{} // protected by GLOBAL groupsMutex
-	step    atomic.Int32        // ping step
+	writing bool         // write goroutine is running
+	exiting bool         // client is exiting
+	step    atomic.Int32 // ping step
 }
 
 func newClient(id string, conn *websocket.Conn) *Client {
@@ -269,18 +270,24 @@ func (c *Client) shortWrite() {
 	}
 }
 
-var groups = make(map[string]*base.Map[*Client, struct{}])
-var groupsMutex sync.Mutex
+type Group struct {
+	*base.Map[*Client, struct{}]
+}
+
+var groups = base.NewMap[string, Group](base.StringHash[string], 512)
 
 var errAlreadyInGroup = errors.New("already in group")
 var errNotInGroup = errors.New("not in group")
 
 func joinGroup(connId, group string) error {
-	groupsMutex.Lock()
-	defer groupsMutex.Unlock()
 	c, err := findClient(connId)
 	if err != nil {
 		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.exiting {
+		return nil
 	}
 	if _, ok := c.groups[group]; ok {
 		return errAlreadyInGroup // maybe join multi times
@@ -289,22 +296,26 @@ func joinGroup(connId, group string) error {
 		c.groups = make(map[string]struct{})
 	}
 	c.groups[group] = struct{}{}
-	g, ok := groups[group]
-	if !ok {
-		g = base.NewMap[*Client, struct{}](base.PointerHash[Client], groupShards)
-		groups[group] = g
-		log.Debugf("create group %+v, groups: %d", group, len(groups))
-	}
-	g.Store(c, struct{}{})
+	groups.CreateOrOperate(group, func() Group {
+		g := Group{base.NewMap[*Client, struct{}](base.PointerHash[Client], groupShards)}
+		g.Store(c, struct{}{})
+		return g
+	}, func(g Group) bool {
+		g.Store(c, struct{}{})
+		return false
+	})
 	return nil
 }
 
 func leaveGroup(connId, group string) error {
-	groupsMutex.Lock()
-	defer groupsMutex.Unlock()
 	c, err := findClient(connId)
 	if err != nil {
 		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.exiting {
+		return nil
 	}
 	if _, ok := c.groups[group]; !ok {
 		return errNotInGroup // maybe leave multi times
@@ -314,14 +325,12 @@ func leaveGroup(connId, group string) error {
 	return nil
 }
 
-// ONLY use by leaveGroup & cleanClient; c MUST in group
+// ONLY use by leaveGroup & cleanClient; c MUST in group, so will NEVER create
 func removeFromGroup(c *Client, group string) {
-	g := groups[group]
-	g.Delete(c)
-	if g.Size() == 0 {
-		delete(groups, group)
-		log.Debugf("delete group %+v, groups: %d", group, len(groups))
-	}
+	groups.CreateOrOperate(group, nil, func(g Group) bool {
+		g.Delete(c)
+		return g.Size() == 0
+	})
 }
 
 func broadcastText(group string, exclude []string, content string) {
@@ -333,9 +342,7 @@ func broadcastBinary(group string, exclude []string, content []byte) {
 }
 
 func broadcastMessage(group string, exclude []string, msg *message) {
-	groupsMutex.Lock()
-	g, ok := groups[group]
-	groupsMutex.Unlock()
+	g, ok := groups.Load(group)
 	if !ok {
 		return
 	}
@@ -348,9 +355,10 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 }
 
 func cleanClient(c *Client) {
-	groupsMutex.Lock()
-	defer groupsMutex.Unlock()
-	clients.Delete(c.id) // join & leave no-op after this
+	clients.Delete(c.id)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.exiting = true // join & leave no-op after this
 	for group := range c.groups {
 		removeFromGroup(c, group)
 	}
