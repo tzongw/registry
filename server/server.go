@@ -18,7 +18,7 @@ const (
 	readWait       = 3 * common.PingInterval
 	writeWait      = time.Second
 	maxMessageSize = 100 * 1024
-	groupShards    = 16
+	groupShards    = 32
 )
 
 var clients = base.NewMap[string, *Client](base.StringHash[string], 128)
@@ -269,7 +269,7 @@ func (c *Client) shortWrite() {
 	}
 }
 
-var groups = make(map[string]*base.Map[string, *Client])
+var groups = make(map[string]*base.Map[*Client, struct{}])
 var groupsMutex sync.Mutex
 
 var errAlreadyInGroup = errors.New("already in group")
@@ -291,11 +291,11 @@ func joinGroup(connId, group string) error {
 	c.groups[group] = struct{}{}
 	g, ok := groups[group]
 	if !ok {
-		g = base.NewMap[string, *Client](base.StringHash[string], groupShards)
+		g = base.NewMap[*Client, struct{}](base.PointerHash[Client], groupShards)
 		groups[group] = g
 		log.Debugf("create group %+v, groups: %d", group, len(groups))
 	}
-	g.Store(connId, c)
+	g.Store(c, struct{}{})
 	return nil
 }
 
@@ -317,7 +317,7 @@ func leaveGroup(connId, group string) error {
 // ONLY use by leaveGroup & cleanClient; c MUST in group
 func removeFromGroup(c *Client, group string) {
 	g := groups[group]
-	g.Delete(c.id)
+	g.Delete(c)
 	if g.Size() == 0 {
 		delete(groups, group)
 		log.Debugf("delete group %+v, groups: %d", group, len(groups))
@@ -339,7 +339,7 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 	if !ok {
 		return
 	}
-	go g.Range(func(_ string, c *Client) bool {
+	go g.Range(func(c *Client, _ struct{}) bool {
 		if !base.Contains(exclude, c.id) {
 			c.sendMessage(msg)
 		}

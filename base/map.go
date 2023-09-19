@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 )
 
 type Signed interface {
@@ -31,6 +32,10 @@ func StringHash[K ~string](k K) int {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(k))
 	return int(h.Sum32())
+}
+
+func PointerHash[T any](k *T) int {
+	return int(uintptr(unsafe.Pointer(k)))
 }
 
 type Shard[K comparable, V any] struct {
