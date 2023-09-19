@@ -24,18 +24,23 @@ type Float interface {
 	~float32 | ~float64
 }
 
-func NumericHash[K Integer | Float](k K) int {
-	return int(k)
+func NumericHash[K Integer | Float](k K) uint {
+	// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+	x := uint(k)
+	x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9
+	x = (x ^ (x >> 27)) * 0x94d049bb133111eb
+	x = x ^ (x >> 31)
+	return x
 }
 
-func StringHash[K ~string](k K) int {
+func StringHash[K ~string](k K) uint {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(k))
-	return int(h.Sum32())
+	return uint(h.Sum32())
 }
 
-func PointerHash[T any](k *T) int {
-	return int(uintptr(unsafe.Pointer(k)))
+func PointerHash[T any](k *T) uint {
+	return NumericHash(uintptr(unsafe.Pointer(k)))
 }
 
 type Shard[K comparable, V any] struct {
@@ -44,17 +49,17 @@ type Shard[K comparable, V any] struct {
 }
 
 type Map[K comparable, V any] struct {
-	hash   func(k K) int
+	hash   func(k K) uint
 	shards []Shard[K, V]
 	size   atomic.Int64
 }
 
-func NewMap[K comparable, V any](hash func(k K) int, shards int) *Map[K, V] {
+func NewMap[K comparable, V any](hash func(k K) uint, shards uint) *Map[K, V] {
 	return &Map[K, V]{hash: hash, shards: make([]Shard[K, V], shards, shards)}
 }
 
 func (m *Map[K, V]) Store(k K, v V) {
-	i := m.hash(k) % len(m.shards)
+	i := m.hash(k) % uint(len(m.shards))
 	shard := &m.shards[i]
 	shard.mu.Lock()
 	if _, ok := shard.m[k]; !ok {
@@ -68,7 +73,7 @@ func (m *Map[K, V]) Store(k K, v V) {
 }
 
 func (m *Map[K, V]) Delete(k K) {
-	i := m.hash(k) % len(m.shards)
+	i := m.hash(k) % uint(len(m.shards))
 	shard := &m.shards[i]
 	shard.mu.Lock()
 	if _, ok := shard.m[k]; ok {
@@ -82,7 +87,7 @@ func (m *Map[K, V]) Delete(k K) {
 }
 
 func (m *Map[K, V]) Load(k K) (v V, ok bool) {
-	i := m.hash(k) % len(m.shards)
+	i := m.hash(k) % uint(len(m.shards))
 	shard := &m.shards[i]
 	shard.mu.RLock()
 	v, ok = shard.m[k]
