@@ -51,12 +51,16 @@ type Map[K comparable, V any] struct {
 }
 
 func NewMap[K comparable, V any](hash func(k K) uint, shards uint) *Map[K, V] {
-	return &Map[K, V]{hash: hash, shards: make([]Shard[K, V], shards, shards)}
+	return &Map[K, V]{hash: hash, shards: make([]Shard[K, V], shards)}
+}
+
+func (m *Map[K, V]) getShard(k K) *Shard[K, V] {
+	i := m.hash(k) % uint(len(m.shards))
+	return &m.shards[i]
 }
 
 func (m *Map[K, V]) Store(k K, v V) {
-	i := m.hash(k) % uint(len(m.shards))
-	shard := &m.shards[i]
+	shard := m.getShard(k)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 	if _, ok := shard.m[k]; !ok {
@@ -69,8 +73,7 @@ func (m *Map[K, V]) Store(k K, v V) {
 }
 
 func (m *Map[K, V]) Delete(k K) {
-	i := m.hash(k) % uint(len(m.shards))
-	shard := &m.shards[i]
+	shard := m.getShard(k)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 	if _, ok := shard.m[k]; !ok {
@@ -84,8 +87,7 @@ func (m *Map[K, V]) Delete(k K) {
 }
 
 func (m *Map[K, V]) CreateOrOperate(k K, create func() V, operate func(V) bool) {
-	i := m.hash(k) % uint(len(m.shards))
-	shard := &m.shards[i]
+	shard := m.getShard(k)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 	if v, ok := shard.m[k]; ok {
@@ -106,8 +108,7 @@ func (m *Map[K, V]) CreateOrOperate(k K, create func() V, operate func(V) bool) 
 }
 
 func (m *Map[K, V]) Load(k K) (v V, ok bool) {
-	i := m.hash(k) % uint(len(m.shards))
-	shard := &m.shards[i]
+	shard := m.getShard(k)
 	shard.mu.RLock()
 	v, ok = shard.m[k]
 	shard.mu.RUnlock()
