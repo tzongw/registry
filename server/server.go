@@ -154,6 +154,7 @@ func (c *Client) SendBinary(content []byte) {
 
 func (c *Client) sendMessage(msg *message) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if len(c.backlog) == 0 {
 		select {
 		case c.ch <- msg:
@@ -165,13 +166,11 @@ func (c *Client) sendMessage(msg *message) {
 					go c.longWrite()
 				}
 			}
-			c.mu.Unlock()
 			return
 		default:
 		}
 	}
 	c.backlog = append(c.backlog, msg)
-	c.mu.Unlock()
 }
 
 func (c *Client) ping() {
@@ -218,12 +217,11 @@ func (c *Client) writeOne(msg *message) bool {
 
 func (c *Client) exitWrite() bool {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if len(c.ch) == 0 {
 		c.writing = false
-		c.mu.Unlock()
 		return true
 	}
-	c.mu.Unlock()
 	return false
 }
 
