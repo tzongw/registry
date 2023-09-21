@@ -313,9 +313,6 @@ func leaveGroup(connId, group string) error {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.exiting {
-		return errClientExiting
-	}
 	if _, ok := c.groups[group]; !ok {
 		return errNotInGroup // maybe leave multi times
 	}
@@ -357,8 +354,9 @@ func cleanClient(c *Client) {
 	clients.Delete(c.id)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.exiting = true // join & leave no-op after this
+	c.exiting = true // NO joinGroup after this
 	for group := range c.groups {
 		removeFromGroup(c, group)
 	}
+	c.groups = nil // NO leaveGroup after this
 }
