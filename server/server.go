@@ -276,6 +276,7 @@ var groups = base.NewMap[string, Group](base.StringHash[string], 512)
 
 var errAlreadyInGroup = errors.New("already in group")
 var errNotInGroup = errors.New("not in group")
+var errClientExiting = errors.New("client exiting")
 
 func joinGroup(connId, group string) error {
 	c, err := findClient(connId)
@@ -285,7 +286,7 @@ func joinGroup(connId, group string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.exiting {
-		return nil
+		return errClientExiting
 	}
 	if _, ok := c.groups[group]; ok {
 		return errAlreadyInGroup // maybe join multi times
@@ -313,7 +314,7 @@ func leaveGroup(connId, group string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.exiting {
-		return nil
+		return errClientExiting
 	}
 	if _, ok := c.groups[group]; !ok {
 		return errNotInGroup // maybe leave multi times
