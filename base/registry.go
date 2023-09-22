@@ -131,7 +131,6 @@ func (s *Registry) AddCallback(cb func()) {
 }
 
 func (s *Registry) run() {
-	log.Debug("run")
 	sub := s.redis.Subscribe(context.Background(), Prefix)
 	for {
 		if len(s.services) > 0 && !s.stopped.Load() {

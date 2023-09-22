@@ -64,15 +64,9 @@ func newClient(id string, conn *websocket.Conn) *Client {
 	}
 }
 
-func (c *Client) String() string {
-	return c.id
-}
-
 func (c *Client) Serve() {
-	log.Debug("serve start ", c)
 	timer := time.AfterFunc(common.PingInterval, c.ping)
 	defer func() {
-		log.Debug("serve stop ", c)
 		timer.Stop()
 		c.Stop()
 		_ = common.UserClient.Disconnect(context.Background(), rpcAddr, c.id, c.context())
@@ -88,7 +82,6 @@ func (c *Client) Serve() {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
 		typ, content, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Debug(err)
 			return
 		}
 		ctx := base.WithHint(context.Background(), c.id)
@@ -121,14 +114,12 @@ func (c *Client) context() map[string]string {
 }
 
 func (c *Client) SetContext(key string, value string) {
-	log.Debugf("%+v: %+v %+v", c, key, value)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.ctx = base.MergeMap(c.ctx, map[string]string{key: value}) // make a copy, DONT modify content
 }
 
 func (c *Client) UnsetContext(key string, value string) {
-	log.Debugf("%+v: %+v %+v", c, key, value)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if value == "" || c.ctx[key] == value {
@@ -188,7 +179,6 @@ func (c *Client) ping() {
 
 func (c *Client) writeOne(msg *message) bool {
 	if msg == nil {
-		log.Debug("stopped ", c)
 		_ = c.conn.Close()
 		return false
 	}
