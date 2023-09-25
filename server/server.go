@@ -15,6 +15,7 @@ import (
 )
 
 const (
+	clientPingWait = 2 * common.PingInterval
 	readWait       = 3 * common.PingInterval
 	writeWait      = time.Second
 	maxMessageSize = 100 * 1024
@@ -65,18 +66,34 @@ func newClient(id string, conn *websocket.Conn) *Client {
 }
 
 func (c *Client) Serve() {
-	timer := time.AfterFunc(common.PingInterval, c.ping)
+	timer := time.AfterFunc(clientPingWait, c.ping)
 	defer func() {
-		timer.Stop()
+		if timer != nil {
+			timer.Stop()
+		}
 		c.Stop()
 		_ = common.UserClient.Disconnect(context.Background(), rpcAddr, c.id, c.context())
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
-	h := c.conn.PongHandler()
-	c.conn.SetPongHandler(func(appData string) error {
+	ping := c.conn.PingHandler()
+	c.conn.SetPingHandler(func(appData string) error {
+		// client ping, can save a timer
+		if timer != nil {
+			timer.Stop()
+			timer = nil
+		}
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
-		timer.Reset(common.PingInterval)
-		return h(appData)
+		c.rpcPing()
+		return ping(appData)
+	})
+	pong := c.conn.PongHandler()
+	c.conn.SetPongHandler(func(appData string) error {
+		// server ping, timer should not be nil
+		if timer != nil {
+			timer.Reset(common.PingInterval)
+		}
+		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
+		return pong(appData)
 	})
 	for {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
@@ -166,6 +183,10 @@ func (c *Client) sendMessage(msg *message) {
 
 func (c *Client) ping() {
 	c.sendMessage(pingMessage)
+	c.rpcPing()
+}
+
+func (c *Client) rpcPing() {
 	if c.step.Add(1) < common.RpcPingStep {
 		return
 	}
