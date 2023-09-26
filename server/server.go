@@ -52,7 +52,6 @@ type Client struct {
 	backlog []*message
 	writing bool         // write goroutine is running
 	exiting bool         // client is exiting
-	closed  bool         // conn closed
 	step    atomic.Int32 // ping step
 }
 
@@ -171,12 +170,8 @@ func (c *Client) rpcPing() {
 }
 
 func (c *Client) writeOne(msg *message) bool {
-	if c.closed {
-		return false
-	}
 	if msg == nil {
 		_ = c.conn.Close()
-		c.closed = true
 		return false
 	}
 	// try load next msg, ch may be filled
@@ -197,7 +192,6 @@ func (c *Client) writeOne(msg *message) bool {
 	if err := c.conn.WriteMessage(msg.typ, msg.content); err != nil {
 		log.Infof("write error %+v %+v", err, c)
 		_ = c.conn.Close()
-		c.closed = true
 		return false
 	}
 	return true
@@ -230,7 +224,7 @@ func (c *Client) writer() {
 				<-t.C
 			}
 			if !c.writeOne(m) {
-				return
+				return // keep writing status true
 			}
 		case <-t.C:
 			if c.exitWrite() {
