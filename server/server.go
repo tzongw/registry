@@ -41,7 +41,6 @@ type message struct {
 }
 
 var messagePool = sync.Pool{New: func() any { return &message{recyclable: true} }}
-var pingMessage = &message{typ: websocket.PingMessage}
 
 type Client struct {
 	id      string
@@ -65,17 +64,15 @@ func newClient(id string, conn *websocket.Conn) *Client {
 }
 
 func (c *Client) Serve() {
-	timer := time.AfterFunc(common.PingInterval, c.ping)
 	defer func() {
-		timer.Stop()
 		c.Stop()
 		_ = common.UserClient.Disconnect(context.Background(), rpcAddr, c.id, c.context())
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
-	h := c.conn.PongHandler()
-	c.conn.SetPongHandler(func(appData string) error {
+	h := c.conn.PingHandler()
+	c.conn.SetPingHandler(func(appData string) error {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
-		timer.Reset(common.PingInterval)
+		c.rpcPing()
 		return h(appData)
 	})
 	for {
@@ -151,11 +148,7 @@ func (c *Client) sendMessage(msg *message) {
 		case c.ch <- msg:
 			if !c.writing {
 				c.writing = true
-				if msg == pingMessage {
-					go c.shortWrite()
-				} else {
-					go c.longWrite()
-				}
+				go c.writer()
 			}
 			return
 		default:
@@ -164,8 +157,7 @@ func (c *Client) sendMessage(msg *message) {
 	c.backlog = append(c.backlog, msg)
 }
 
-func (c *Client) ping() {
-	c.sendMessage(pingMessage)
+func (c *Client) rpcPing() {
 	if c.step.Add(1) < common.RpcPingStep {
 		return
 	}
@@ -215,7 +207,7 @@ func (c *Client) exitWrite() bool {
 	return false
 }
 
-func (c *Client) longWrite() {
+func (c *Client) writer() {
 	var t *time.Timer
 	idleWait := common.PingInterval/4 + time.Duration(rand.Int63n(int64(common.PingInterval/2)))
 	if v := timerPool.Get(); v != nil {
