@@ -190,7 +190,6 @@ func (c *Client) writeOne(msg *message) bool {
 		defer messagePool.Put(msg)
 	}
 	if err := c.conn.WriteMessage(msg.typ, msg.content); err != nil {
-		log.Infof("write error %+v %+v", err, c)
 		_ = c.conn.Close()
 		return false
 	}
