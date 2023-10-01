@@ -208,7 +208,7 @@ func (c *Client) exitWrite() bool {
 
 func (c *Client) writer() {
 	var t *time.Timer
-	idleWait := common.PingInterval/4 + time.Duration(rand.Int63n(int64(common.PingInterval/2)))
+	idleWait := time.Second + time.Duration(rand.Int63n(int64(common.PingInterval)))
 	if v := timerPool.Get(); v != nil {
 		t = v.(*time.Timer)
 		t.Reset(idleWait)
