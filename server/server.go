@@ -69,11 +69,10 @@ func (c *Client) Serve() {
 		_ = common.UserClient.Disconnect(context.Background(), rpcAddr, c.id, c.context())
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
-	h := c.conn.PingHandler()
 	c.conn.SetPingHandler(func(appData string) error {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
 		c.rpcPing()
-		return h(appData)
+		return nil
 	})
 	for {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
