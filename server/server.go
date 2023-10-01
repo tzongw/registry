@@ -174,17 +174,6 @@ func (c *Client) writeOne(msg *message) bool {
 		_ = c.conn.Close()
 		return false
 	}
-	// try load next msg, ch may be filled
-	c.mu.Lock()
-	if len(c.backlog) > 0 {
-		select {
-		case c.ch <- c.backlog[0]:
-			c.backlog[0] = nil
-			c.backlog = c.backlog[1:]
-		default:
-		}
-	}
-	c.mu.Unlock()
 	_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 	if msg.recyclable {
 		defer messagePool.Put(msg)
@@ -192,6 +181,17 @@ func (c *Client) writeOne(msg *message) bool {
 	if err := c.conn.WriteMessage(msg.typ, msg.content); err != nil {
 		_ = c.conn.Close()
 		return false
+	}
+	// try to load next msg, ch may be filled
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.backlog) > 0 {
+		select {
+		case c.ch <- c.backlog[0]:
+			c.backlog[0] = nil
+			c.backlog = c.backlog[1:]
+		default:
+		}
 	}
 	return true
 }
