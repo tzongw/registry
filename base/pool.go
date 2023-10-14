@@ -67,12 +67,7 @@ func (p *Pool[T]) Get() (*T, error) {
 	p.m.Lock()
 	if p.queue == 0 && len(p.idleC) > 0 {
 		defer p.m.Unlock()
-		select {
-		case i := <-p.idleC:
-			return i, nil
-		default:
-			panic("idleC blocked!!")
-		}
+		return <-p.idleC, nil // NEVER block
 	} else if p.size >= p.opt.PoolSize {
 		p.queue += 1
 		p.m.Unlock()
