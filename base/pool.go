@@ -4,8 +4,6 @@ import (
 	"errors"
 	"sync"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 var ErrTimeout = errors.New("pool timeout")
@@ -89,7 +87,6 @@ func (p *Pool[T]) Get() (*T, error) {
 		p.m.Unlock() // Open may slow
 		i, err := p.factory.Open()
 		if err != nil {
-			log.Error(err)
 			p.m.Lock()
 			p.size -= 1
 			p.m.Unlock()
