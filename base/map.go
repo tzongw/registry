@@ -30,9 +30,9 @@ func IntegerHash[K Integer](k K) uint {
 }
 
 func StringHash[K ~string](k K) uint {
-	h := fnv.New32a()
+	h := fnv.New64a()
 	_, _ = h.Write([]byte(k))
-	return uint(h.Sum32())
+	return uint(h.Sum64())
 }
 
 func PointerHash[T any](k *T) uint {
