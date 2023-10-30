@@ -307,7 +307,7 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 	if !ok {
 		return
 	}
-	go g.Range(func(c *Client, _ struct{}) bool {
+	g.Range(func(c *Client, _ struct{}) bool {
 		if !base.Contains(exclude, c.id) {
 			c.sendMessage(msg)
 		}
