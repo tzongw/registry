@@ -38,11 +38,7 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	}()
 	params := make(map[string]string)
 	for k := range r.Header {
-		if strings.HasPrefix(k, "X-") {
-			params[k[len("X-"):]] = r.Header.Get(k)
-		} else {
-			params[k] = r.Header.Get(k)
-		}
+		params[k] = r.Header.Get(k)
 	}
 	query := r.URL.Query()
 	for k := range query {
