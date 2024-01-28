@@ -18,10 +18,10 @@ const (
 	readWait       = 3 * common.PingInterval
 	writeWait      = time.Second
 	maxMessageSize = 100 * 1024
-	groupShards    = 32
+	groupShards    = 29
 )
 
-var clients = base.NewMap[string, *Client](base.StringHash[string], 128)
+var clients = base.NewMap[string, *Client](base.StringHash[string], 389)
 var timerPool sync.Pool
 
 var errNotExist = errors.New("not exist")
@@ -237,7 +237,7 @@ type Group struct {
 	*base.Map[*Client, struct{}]
 }
 
-var groups = base.NewMap[string, Group](base.StringHash[string], 512)
+var groups = base.NewMap[string, Group](base.StringHash[string], 769)
 
 var errAlreadyInGroup = errors.New("already in group")
 var errNotInGroup = errors.New("not in group")
