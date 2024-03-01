@@ -2,21 +2,19 @@ package server
 
 import (
 	"context"
+	"net"
+	"net/http"
+	"os"
+	"strings"
+
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/tzongw/registry/base"
 	"github.com/tzongw/registry/common"
-	"net"
-	"net/http"
-	"os"
-	"strings"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
+var upgrader = websocket.Upgrader{} // use default options
 
 func wsHandle(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
