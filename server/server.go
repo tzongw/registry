@@ -41,23 +41,21 @@ type message struct {
 var messagePool = sync.Pool{New: func() any { return &message{recyclable: true} }}
 
 type Client struct {
-	id      string
-	conn    *websocket.Conn
-	mu      sync.Mutex
-	ctx     map[string]string
-	groups  map[string]struct{}
-	ch      chan *message
-	backlog []*message
-	writing bool         // write goroutine is running
-	exiting bool         // client is exiting
-	step    atomic.Int32 // ping step
+	id       string
+	conn     *websocket.Conn
+	mu       sync.Mutex
+	ctx      map[string]string
+	groups   map[string]struct{}
+	messages []*message
+	writing  bool         // write goroutine is running
+	exiting  bool         // client is exiting
+	step     atomic.Int32 // ping step
 }
 
 func newClient(id string, conn *websocket.Conn) *Client {
 	return &Client{
 		id:   id,
 		conn: conn,
-		ch:   make(chan *message, 1),
 	}
 }
 
@@ -97,7 +95,7 @@ func (c *Client) Serve() {
 }
 
 func (c *Client) Stop() {
-	// some msg may in backlog, can not close ch,  send nil msg as close
+	// send nil msg as close
 	c.sendMessage(nil)
 }
 
@@ -140,18 +138,11 @@ func (c *Client) SendBinary(content []byte) {
 func (c *Client) sendMessage(msg *message) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if len(c.backlog) == 0 {
-		select {
-		case c.ch <- msg:
-			if !c.writing {
-				c.writing = true
-				go c.writer()
-			}
-			return
-		default:
-		}
+	c.messages = append(c.messages, msg)
+	if !c.writing {
+		c.writing = true
+		go c.writer()
 	}
-	c.backlog = append(c.backlog, msg)
 }
 
 func (c *Client) rpcPing() {
@@ -179,40 +170,23 @@ func (c *Client) writeOne(msg *message) bool {
 		_ = c.conn.Close()
 		return false
 	}
-	// try to load next msg, ch may be filled
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if len(c.backlog) > 0 {
-		select {
-		case c.ch <- c.backlog[0]:
-			c.backlog[0] = nil
-			c.backlog = c.backlog[1:]
-		default:
-		}
-	}
 	return true
-}
-
-func (c *Client) exitWrite() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if len(c.ch) == 0 {
-		c.writing = false
-		return true
-	}
-	return false
 }
 
 func (c *Client) writer() {
 	for {
-		select {
-		case m := <-c.ch:
+		c.mu.Lock()
+		if len(c.messages) == 0 {
+			c.writing = false
+			c.mu.Unlock()
+			return
+		}
+		messages := c.messages
+		c.messages = nil
+		c.mu.Unlock()
+		for _, m := range messages {
 			if !c.writeOne(m) {
 				return // keep writing status true
-			}
-		default:
-			if c.exitWrite() {
-				return
 			}
 		}
 	}
