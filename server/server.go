@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,7 +21,6 @@ const (
 )
 
 var clients = base.NewMap[string, *Client](base.StringHash[string], 389)
-var timerPool sync.Pool
 
 var errNotExist = errors.New("not exist")
 
@@ -206,30 +204,17 @@ func (c *Client) exitWrite() bool {
 }
 
 func (c *Client) writer() {
-	var t *time.Timer
-	idleWait := time.Second + time.Duration(rand.Int63n(int64(common.PingInterval)))
-	if v := timerPool.Get(); v != nil {
-		t = v.(*time.Timer)
-		t.Reset(idleWait)
-	} else {
-		t = time.NewTimer(idleWait)
-	}
-	defer timerPool.Put(t)
 	for {
 		select {
 		case m := <-c.ch:
-			if !t.Stop() {
-				<-t.C
-			}
 			if !c.writeOne(m) {
 				return // keep writing status true
 			}
-		case <-t.C:
+		default:
 			if c.exitWrite() {
 				return
 			}
 		}
-		t.Reset(idleWait)
 	}
 }
 
