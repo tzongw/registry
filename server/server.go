@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -47,9 +46,9 @@ type Client struct {
 	ctx      map[string]string
 	groups   map[string]struct{}
 	messages []*message
-	writing  bool         // write goroutine is running
-	exiting  bool         // client is exiting
-	step     atomic.Int32 // ping step
+	writing  bool // write goroutine is running
+	exiting  bool // client is exiting
+	step     int  // ping step
 }
 
 func newClient(id string, conn *websocket.Conn) *Client {
@@ -146,10 +145,11 @@ func (c *Client) sendMessage(msg *message) {
 }
 
 func (c *Client) rpcPing() {
-	if c.step.Add(1) < common.RpcPingStep {
+	c.step += 1
+	if c.step < common.RpcPingStep {
 		return
 	}
-	c.step.Store(0)
+	c.step = 0
 	ctx := base.WithHint(context.Background(), c.id)
 	if err := common.UserClient.Ping(ctx, rpcAddr, c.id, c.context()); err != nil {
 		log.Errorf("service not available %+v", err)
