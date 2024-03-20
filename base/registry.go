@@ -90,7 +90,7 @@ func (s *Registry) unregister() {
 func (s *Registry) refresh() {
 	log.Trace("refresh")
 	var keys []string
-	scan := s.redis.Scan(context.Background(), 0, Prefix+":*", 100)
+	scan := s.redis.Scan(context.Background(), 0, Prefix+":*", 1000)
 	for i := scan.Iterator(); i.Next(context.Background()); {
 		keys = append(keys, i.Val())
 	}
@@ -159,15 +159,18 @@ func (s *Registry) run() {
 			}
 		}
 		s.refresh()
-		if m, err := sub.ReceiveTimeout(context.Background(), RefreshInterval); err != nil {
-			if err, ok := err.(net.Error); ok && err.Timeout() {
-				continue
+		timeout := RefreshInterval
+		for i := 0; i < 100; i += 1 { // receive up to 100
+			if m, err := sub.ReceiveTimeout(context.Background(), timeout); err != nil {
+				if netErr, ok := err.(net.Error); !(ok && netErr.Timeout()) {
+					log.Error(err)
+					time.Sleep(RefreshInterval)
+				}
+				break
 			} else {
-				log.Error(err)
-				time.Sleep(RefreshInterval)
+				log.Debug(m)
+				timeout = time.Millisecond // timeout 0 will block forever
 			}
-		} else {
-			log.Info(m)
 		}
 	}
 }
