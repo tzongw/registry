@@ -174,14 +174,21 @@ func (c *Client) writeOne(msg *message) bool {
 }
 
 func (c *Client) writer() {
+	var messages []*message
 	for {
 		c.mu.Lock()
 		if len(c.messages) == 0 {
 			c.writing = false
+			if cap(messages) < 8 {
+				for i := range messages {
+					messages[i] = nil
+				}
+				c.messages = messages[:0]
+			}
 			c.mu.Unlock()
 			return
 		}
-		messages := c.messages
+		messages = c.messages
 		c.messages = nil
 		c.mu.Unlock()
 		for _, m := range messages {
