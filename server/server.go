@@ -32,9 +32,9 @@ func findClient(connId string) (*Client, error) {
 }
 
 type message struct {
-	typ        int
-	recyclable bool
 	content    []byte
+	typ        int16
+	recyclable bool
 }
 
 var messagePool = sync.Pool{New: func() any { return &message{recyclable: true} }}
@@ -166,7 +166,7 @@ func (c *Client) writeOne(msg *message) bool {
 	if msg.recyclable {
 		defer messagePool.Put(msg)
 	}
-	if err := c.conn.WriteMessage(msg.typ, msg.content); err != nil {
+	if err := c.conn.WriteMessage(int(msg.typ), msg.content); err != nil {
 		_ = c.conn.Close()
 		return false
 	}
