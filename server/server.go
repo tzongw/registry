@@ -98,6 +98,19 @@ func (c *Client) Stop() {
 	c.sendMessage(nil)
 }
 
+func (c *Client) rpcPing() {
+	c.step += 1
+	if c.step < common.RpcPingStep {
+		return
+	}
+	c.step = 0
+	ctx := base.WithHint(context.Background(), c.id)
+	if err := common.UserClient.Ping(ctx, rpcAddr, c.id, c.context()); err != nil {
+		log.Errorf("service not available %+v", err)
+		return
+	}
+}
+
 func (c *Client) context() map[string]string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -144,28 +157,18 @@ func (c *Client) sendMessage(msg *message) {
 	}
 }
 
-func (c *Client) rpcPing() {
-	c.step += 1
-	if c.step < common.RpcPingStep {
-		return
-	}
-	c.step = 0
-	ctx := base.WithHint(context.Background(), c.id)
-	if err := common.UserClient.Ping(ctx, rpcAddr, c.id, c.context()); err != nil {
-		log.Errorf("service not available %+v", err)
-		return
-	}
-}
-
 func (c *Client) writeOne(msg *message) bool {
 	if msg == nil {
 		_ = c.conn.Close()
 		return false
 	}
-	_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 	if msg.recyclable {
-		defer messagePool.Put(msg)
+		defer func() {
+			msg.content = nil
+			messagePool.Put(msg)
+		}()
 	}
+	_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 	if err := c.conn.WriteMessage(int(msg.typ), msg.content); err != nil {
 		_ = c.conn.Close()
 		return false
