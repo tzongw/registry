@@ -59,14 +59,15 @@ func newClient(id string, conn *websocket.Conn) *Client {
 }
 
 func (c *Client) Serve() {
+	ctx := base.WithHint(context.Background(), c.id)
 	defer func() {
 		c.Stop()
-		_ = common.UserClient.Disconnect(context.Background(), rpcAddr, c.id, c.context())
+		_ = common.UserClient.Disconnect(ctx, rpcAddr, c.id, c.context())
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetPingHandler(func(appData string) error {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
-		c.rpcPing()
+		c.rpcPing(ctx)
 		return nil
 	})
 	for {
@@ -75,7 +76,6 @@ func (c *Client) Serve() {
 		if err != nil {
 			return
 		}
-		ctx := base.WithHint(context.Background(), c.id)
 		switch typ {
 		case websocket.BinaryMessage:
 			if err = common.UserClient.RecvBinary(ctx, rpcAddr, c.id, c.context(), content); err != nil {
@@ -98,13 +98,12 @@ func (c *Client) Stop() {
 	c.sendMessage(nil)
 }
 
-func (c *Client) rpcPing() {
+func (c *Client) rpcPing(ctx context.Context) {
 	c.step += 1
 	if c.step < common.RpcPingStep {
 		return
 	}
 	c.step = 0
-	ctx := base.WithHint(context.Background(), c.id)
 	if err := common.UserClient.Ping(ctx, rpcAddr, c.id, c.context()); err != nil {
 		log.Errorf("service not available %+v", err)
 		return
