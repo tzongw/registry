@@ -70,8 +70,8 @@ func (c *Client) Serve() {
 		c.rpcPing(ctx)
 		return nil
 	})
+	_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
 	for {
-		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
 		typ, content, err := c.conn.ReadMessage()
 		if err != nil {
 			return
