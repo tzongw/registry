@@ -150,7 +150,7 @@ func (s *Registry) run() {
 			} else {
 				for _, cmd := range cmds {
 					statusCmd := cmd.(*redis.StatusCmd)
-					if _, err := statusCmd.Result(); err == redis.Nil {
+					if _, err := statusCmd.Result(); errors.Is(err, redis.Nil) {
 						log.Info("publish ", s.services)
 						s.redis.Publish(context.Background(), Prefix, "register")
 						break
@@ -162,7 +162,8 @@ func (s *Registry) run() {
 		timeout := RefreshInterval
 		for i := 0; i < 100; i++ { // receive up to 100
 			if m, err := sub.ReceiveTimeout(context.Background(), timeout); err != nil {
-				if netErr, ok := err.(net.Error); !(ok && netErr.Timeout()) {
+				var netErr net.Error
+				if !(errors.As(err, &netErr) && netErr.Timeout()) {
 					log.Error(err)
 					time.Sleep(RefreshInterval)
 				}
