@@ -54,12 +54,12 @@ func (t *ThriftFactory) Close(c *client) error {
 }
 
 type AddrClient struct {
-	p *Pool[client]
+	p *Pool[*client]
 }
 
 func NewAddrClient(addr string, opt *Options) *AddrClient {
 	return &AddrClient{
-		p: NewPool[client](NewThriftFactory(addr), opt),
+		p: NewPool[*client](NewThriftFactory(addr), opt),
 	}
 }
 

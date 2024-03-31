@@ -9,8 +9,8 @@ import (
 var ErrTimeout = errors.New("pool timeout")
 
 type Factory[T any] interface {
-	Open() (*T, error)
-	Close(*T) error
+	Open() (T, error)
+	Close(T) error
 }
 
 type Options struct {
@@ -30,7 +30,7 @@ func DefaultOptions() *Options {
 type Pool[T any] struct {
 	factory Factory[T]
 	opt     *Options
-	idleC   chan *T
+	idleC   chan T
 	size    int
 	queue   int
 	closed  bool
@@ -44,7 +44,7 @@ func NewPool[T any](factory Factory[T], opt *Options) *Pool[T] {
 	return &Pool[T]{
 		factory: factory,
 		opt:     opt,
-		idleC:   make(chan *T, opt.PoolSize)}
+		idleC:   make(chan T, opt.PoolSize)}
 }
 
 func (p *Pool[T]) Close() {
@@ -61,7 +61,7 @@ func (p *Pool[T]) Close() {
 	}
 }
 
-func (p *Pool[T]) Get() (*T, error) {
+func (p *Pool[T]) Get() (T, error) {
 	p.m.Lock()
 	if p.queue == 0 && len(p.idleC) > 0 {
 		defer p.m.Unlock()
@@ -80,7 +80,8 @@ func (p *Pool[T]) Get() (*T, error) {
 		case i := <-p.idleC:
 			return i, nil
 		case <-t.C:
-			return nil, ErrTimeout
+			var empty T
+			return empty, ErrTimeout
 		}
 	} else {
 		p.size++
@@ -95,7 +96,7 @@ func (p *Pool[T]) Get() (*T, error) {
 	}
 }
 
-func (p *Pool[T]) Put(i *T, err error) {
+func (p *Pool[T]) Put(i T, err error) {
 	p.m.Lock()
 	defer p.m.Unlock()
 	if err != nil || p.closed {
