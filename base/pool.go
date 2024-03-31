@@ -67,13 +67,13 @@ func (p *Pool[T]) Get() (*T, error) {
 		defer p.m.Unlock()
 		return <-p.idleC, nil // NEVER block
 	} else if p.size >= p.opt.PoolSize {
-		p.queue += 1
+		p.queue++
 		p.m.Unlock()
 		t := time.NewTimer(p.opt.WaitTimeout)
 		defer func() {
 			t.Stop()
 			p.m.Lock()
-			p.queue -= 1
+			p.queue--
 			p.m.Unlock()
 		}()
 		select {
@@ -83,12 +83,12 @@ func (p *Pool[T]) Get() (*T, error) {
 			return nil, ErrTimeout
 		}
 	} else {
-		p.size += 1
+		p.size++
 		p.m.Unlock() // Open may slow
 		i, err := p.factory.Open()
 		if err != nil {
 			p.m.Lock()
-			p.size -= 1
+			p.size--
 			p.m.Unlock()
 		}
 		return i, err
@@ -100,7 +100,7 @@ func (p *Pool[T]) Put(i *T, err error) {
 	defer p.m.Unlock()
 	if err != nil || p.closed {
 		_ = p.factory.Close(i)
-		p.size -= 1
+		p.size--
 		return
 	}
 	p.idleC <- i

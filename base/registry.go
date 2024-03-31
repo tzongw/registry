@@ -160,7 +160,7 @@ func (s *Registry) run() {
 		}
 		s.refresh()
 		timeout := RefreshInterval
-		for i := 0; i < 100; i += 1 { // receive up to 100
+		for i := 0; i < 100; i++ { // receive up to 100
 			if m, err := sub.ReceiveTimeout(context.Background(), timeout); err != nil {
 				if netErr, ok := err.(net.Error); !(ok && netErr.Timeout()) {
 					log.Error(err)

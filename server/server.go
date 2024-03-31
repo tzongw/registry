@@ -99,7 +99,7 @@ func (c *Client) Stop() {
 }
 
 func (c *Client) rpcPing(ctx context.Context) {
-	c.step += 1
+	c.step++
 	if c.step < common.RpcPingStep {
 		return
 	}
