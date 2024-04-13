@@ -15,7 +15,7 @@ import (
 
 type client struct {
 	*thrift.TStandardClient
-	trans thrift.TTransport
+	thrift.TTransport
 }
 
 type ThriftFactory struct {
@@ -48,35 +48,31 @@ func (t *ThriftFactory) Open() (*client, error) {
 	}
 	iprot := t.protocolFactory.GetProtocol(transport)
 	oprot := t.protocolFactory.GetProtocol(transport)
-	return &client{TStandardClient: thrift.NewTStandardClient(iprot, oprot), trans: transport}, nil
+	return &client{TStandardClient: thrift.NewTStandardClient(iprot, oprot), TTransport: transport}, nil
 }
 
 func (t *ThriftFactory) Close(c *client) error {
-	return c.trans.Close()
+	return c.Close()
 }
 
 type AddrClient struct {
-	p *Pool[*client]
+	*Pool[*client]
 }
 
 func NewAddrClient(addr string, opt Options) *AddrClient {
 	return &AddrClient{
-		p: NewPool[*client](NewThriftFactory(addr, opt.Timeout), opt),
+		NewPool[*client](NewThriftFactory(addr, opt.Timeout), opt),
 	}
 }
 
 func (c *AddrClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
-	cc, err := c.p.Get()
+	cc, err := c.Get()
 	if err != nil {
 		return err
 	}
 	err = cc.Call(ctx, method, args, result)
-	c.p.Put(cc, err)
+	c.Put(cc, err)
 	return err
-}
-
-func (c *AddrClient) Close() {
-	c.p.Close()
 }
 
 var ErrUnavailable = errors.New("unavailable")
@@ -251,12 +247,12 @@ func (c *ServiceClient) client(addr string) *AddrClient {
 }
 
 func (c *ServiceClient) ConnClient(addr string, f func(conn thrift.TClient) error) error {
-	nodeClient := c.client(addr)
-	conn, err := nodeClient.p.Get()
+	addrClient := c.client(addr)
+	conn, err := addrClient.Get()
 	if err != nil {
 		return err
 	}
 	err = f(conn)
-	nodeClient.p.Put(conn, err)
+	addrClient.Put(conn, err)
 	return err
 }
