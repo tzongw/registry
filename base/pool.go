@@ -14,22 +14,20 @@ type Factory[T any] interface {
 }
 
 type Options struct {
-	PoolSize    int
-	WaitTimeout time.Duration
-	IdleTimeout time.Duration // TODO:
+	PoolSize int
+	Timeout  time.Duration
 }
 
-func DefaultOptions() *Options {
-	return &Options{
-		PoolSize:    128,
-		WaitTimeout: time.Second,
-		IdleTimeout: time.Hour,
+func PoolDefaultOptions() Options {
+	return Options{
+		PoolSize: 128,
+		Timeout:  5 * time.Second,
 	}
 }
 
 type Pool[T any] struct {
 	factory Factory[T]
-	opt     *Options
+	opt     Options
 	idleC   chan T
 	size    int
 	queue   int
@@ -37,10 +35,7 @@ type Pool[T any] struct {
 	m       sync.Mutex
 }
 
-func NewPool[T any](factory Factory[T], opt *Options) *Pool[T] {
-	if opt == nil {
-		opt = DefaultOptions()
-	}
+func NewPool[T any](factory Factory[T], opt Options) *Pool[T] {
 	return &Pool[T]{
 		factory: factory,
 		opt:     opt,
@@ -69,7 +64,7 @@ func (p *Pool[T]) Get() (T, error) {
 	} else if p.size >= p.opt.PoolSize {
 		p.queue++
 		p.m.Unlock()
-		t := time.NewTimer(p.opt.WaitTimeout)
+		t := time.NewTimer(p.opt.Timeout)
 		defer func() {
 			t.Stop()
 			p.m.Lock()

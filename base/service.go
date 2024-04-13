@@ -20,20 +20,22 @@ type client struct {
 
 type ThriftFactory struct {
 	addr             string
+	timeout          time.Duration
 	transportFactory thrift.TTransportFactory
 	protocolFactory  thrift.TProtocolFactory
 }
 
-func NewThriftFactory(addr string) *ThriftFactory {
+func NewThriftFactory(addr string, timeout time.Duration) *ThriftFactory {
 	return &ThriftFactory{
 		addr:             addr,
+		timeout:          timeout,
 		transportFactory: thrift.NewTBufferedTransportFactory(8192),
 		protocolFactory:  thrift.NewTBinaryProtocolFactoryDefault(),
 	}
 }
 
 func (t *ThriftFactory) Open() (*client, error) {
-	sock, err := thrift.NewTSocket(t.addr)
+	sock, err := thrift.NewTSocketTimeout(t.addr, t.timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -57,9 +59,9 @@ type AddrClient struct {
 	p *Pool[*client]
 }
 
-func NewAddrClient(addr string, opt *Options) *AddrClient {
+func NewAddrClient(addr string, opt Options) *AddrClient {
 	return &AddrClient{
-		p: NewPool[*client](NewThriftFactory(addr), opt),
+		p: NewPool[*client](NewThriftFactory(addr, opt.Timeout), opt),
 	}
 }
 
@@ -82,7 +84,7 @@ var ErrUnavailable = errors.New("unavailable")
 type ServiceClient struct {
 	service        string
 	registry       *Registry
-	opt            *Options
+	opt            Options
 	m              sync.Mutex
 	clients        map[string]*AddrClient
 	localAddresses sort.StringSlice
@@ -90,7 +92,7 @@ type ServiceClient struct {
 	coolDown       map[string]time.Time
 }
 
-func NewServiceClient(registry *Registry, service string, opt *Options) *ServiceClient {
+func NewServiceClient(registry *Registry, service string, opt Options) *ServiceClient {
 	c := &ServiceClient{
 		registry: registry,
 		service:  service,

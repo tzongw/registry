@@ -47,6 +47,6 @@ func (c *tGateClient) ConnClient(addr string, f func(gate service.Gate) error) e
 func InitShared() {
 	Redis = redis.NewClient(&redis.Options{Addr: *redisAddr})
 	Registry = base.NewRegistry(Redis)
-	UserClient = NewUserClient(base.NewServiceClient(Registry, RpcUser, nil))
-	GateClient = NewGateClient(base.NewServiceClient(Registry, RpcGate, nil))
+	UserClient = NewUserClient(base.NewServiceClient(Registry, RpcUser, base.PoolDefaultOptions()))
+	GateClient = NewGateClient(base.NewServiceClient(Registry, RpcGate, base.PoolDefaultOptions()))
 }
