@@ -160,8 +160,8 @@ type tNodeSelector int
 
 var selector any = tNodeSelector(0)
 
-func WithNode(ctx context.Context, addr string) context.Context {
-	return context.WithValue(ctx, selector, "node:"+addr)
+func WithAddr(ctx context.Context, addr string) context.Context {
+	return context.WithValue(ctx, selector, "addr:"+addr)
 }
 
 func WithHint(ctx context.Context, hint string) context.Context {
@@ -188,25 +188,25 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 	value := "random"
 	if v := ctx.Value(selector); v != nil {
 		value = v.(string)
-		if value == "broadcast" {
-			if result != nil {
-				panic("broadcast MUST be oneway")
-			}
-			var err error
-			addresses := c.registry.Addresses(c.service)
-			for _, addr := range addresses {
-				client := c.client(addr)
-				e := client.Call(ctx, method, args, result)
-				if e != nil {
-					c.addCoolDown(addr)
-					err = e
-				}
-			}
-			return err
+	}
+	if value == "broadcast" {
+		if result != nil {
+			panic("broadcast MUST be oneway")
 		}
+		var err error
+		addresses := c.registry.Addresses(c.service)
+		for _, addr := range addresses {
+			client := c.client(addr)
+			e := client.Call(ctx, method, args, result)
+			if e != nil {
+				c.addCoolDown(addr)
+				err = e
+			}
+		}
+		return err
 	}
 	var addr string
-	if strings.HasPrefix(value, "node:") {
+	if strings.HasPrefix(value, "addr:") {
 		addr = value[5:]
 	} else {
 		addresses := c.preferredAddresses()
