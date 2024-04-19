@@ -156,9 +156,9 @@ func (c *ServiceClient) addCoolDown(addr string) {
 	}
 }
 
-type tNodeSelector int
+type tSelector int
 
-var selector any = tNodeSelector(0)
+var selector any = tSelector(0)
 
 func WithAddr(ctx context.Context, addr string) context.Context {
 	return context.WithValue(ctx, selector, "addr:"+addr)
