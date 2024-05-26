@@ -16,10 +16,10 @@ const (
 	readWait       = 3 * common.PingInterval
 	writeWait      = time.Second
 	maxMessageSize = 100 * 1024
-	groupShards    = 29
+	groupShards    = 29 // prime number for pointer hash
 )
 
-var clients = base.NewMap[string, *Client](base.StringHash[string], 389)
+var clients = base.NewMap[string, *Client](base.StringHash[string], 512)
 
 var errNotExist = errors.New("not exist")
 
@@ -205,7 +205,7 @@ type Group struct {
 	*base.Map[*Client, struct{}]
 }
 
-var groups = base.NewMap[string, Group](base.StringHash[string], 769)
+var groups = base.NewMap[string, Group](base.StringHash[string], 1024)
 
 var errAlreadyInGroup = errors.New("already in group")
 var errNotInGroup = errors.New("not in group")

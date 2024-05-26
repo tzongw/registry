@@ -214,12 +214,12 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 			return ErrUnavailable
 		}
 		if strings.HasPrefix(value, "hint:") {
-			h := fnv.New32a()
+			h := fnv.New64a()
 			hint := value[5:]
 			if _, err := h.Write([]byte(hint)); err != nil {
 				return err
 			}
-			addr = addresses[h.Sum32()%uint32(len(addresses))]
+			addr = addresses[h.Sum64()%uint64(len(addresses))]
 		} else if value == "random" {
 			i := rand.Intn(len(addresses))
 			addr = addresses[i]
