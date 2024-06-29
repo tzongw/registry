@@ -9,3 +9,5 @@ const (
 	RpcGate      = "rpc_gate"
 	WsGate       = "ws_gate"
 )
+
+var Services = []string{RpcUser}

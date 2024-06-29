@@ -3,12 +3,11 @@ package base
 import (
 	"context"
 	"errors"
-	"github.com/go-redis/redis/v9"
+	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
 	"net"
 	"reflect"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,39 +23,29 @@ const (
 type ServiceMap map[string]sort.StringSlice
 
 type Registry struct {
-	services     map[string]string
-	serviceMap   ServiceMap
 	redis        *redis.Client
+	services     []string
+	registered   map[string]string
 	stopped      atomic.Bool
 	m            sync.Mutex
+	serviceMap   ServiceMap
 	afterRefresh []func()
 }
 
-func keyPrefix(name string) string {
+func fullKey(name string) string {
 	return Prefix + ":" + name
 }
 
-func fullKey(name, address string) string {
-	return keyPrefix(name) + ":" + address
-}
-
-func unpack(key string) (string, string, error) {
-	ss := strings.SplitN(key, ":", 3)
-	if len(ss) != 3 {
-		return "", "", errors.New("key not valid")
-	}
-	return ss[1], ss[2], nil
-}
-
-func NewRegistry(redis *redis.Client) *Registry {
+func NewRegistry(redis *redis.Client, services []string) *Registry {
 	return &Registry{
-		redis: redis,
+		redis:    redis,
+		services: services,
 	}
 }
 
 func (s *Registry) Start(services map[string]string) {
 	log.Info("start ", services)
-	s.services = services
+	s.registered = services
 	s.unregister()
 	s.refresh()
 	go s.run()
@@ -76,41 +65,38 @@ func (s *Registry) Addresses(name string) sort.StringSlice {
 
 func (s *Registry) unregister() {
 	log.Info("unregister")
-	if len(s.services) == 0 {
+	if len(s.registered) == 0 {
 		return
 	}
-	keys := make([]string, 0, len(s.services))
-	for name, address := range s.services {
-		keys = append(keys, fullKey(name, address))
-	}
-	s.redis.Del(context.Background(), keys...)
-	s.redis.Publish(context.Background(), Prefix, "unregister")
+	s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
+		for name, addr := range s.registered {
+			p.HDel(context.Background(), fullKey(name), addr)
+		}
+		p.Publish(context.Background(), Prefix, "unregister")
+		return nil
+	})
 }
 
 func (s *Registry) refresh() {
-	log.Trace("refresh")
-	var keys []string
-	scan := s.redis.Scan(context.Background(), 0, Prefix+":*", 1000)
-	for i := scan.Iterator(); i.Next(context.Background()); {
-		keys = append(keys, i.Val())
-	}
-	if err := scan.Err(); err != nil {
+	cmds, err := s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
+		for _, name := range s.services {
+			p.HKeys(context.Background(), fullKey(name))
+		}
+		return nil
+	})
+	if err != nil {
 		log.Error(err)
 		return
 	}
-	sort.Strings(keys) // DeepEqual needs
-	log.Trace(keys)
-	sm := make(ServiceMap)
-	lastKey := ""
-	for _, key := range keys {
-		if key == lastKey { // scan may return duplicate keys
-			continue
-		}
-		lastKey = key
-		if name, address, err := unpack(key); err != nil {
+	sm := make(ServiceMap, len(s.services))
+	for i, cmd := range cmds {
+		name := s.services[i]
+		hkeysCmd := cmd.(*redis.StringSliceCmd)
+		if keys, err := hkeysCmd.Result(); err != nil {
 			log.Error(err)
 		} else {
-			sm[name] = append(sm[name], address)
+			sort.Strings(keys) // DeepEqual needs
+			sm[name] = keys
 		}
 	}
 	s.m.Lock()
@@ -133,25 +119,22 @@ func (s *Registry) AddCallback(cb func()) {
 func (s *Registry) run() {
 	sub := s.redis.Subscribe(context.Background(), Prefix)
 	for {
-		if len(s.services) > 0 && !s.stopped.Load() {
-			cmds, _ := s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
-				args := redis.SetArgs{
-					Get: true,
-					TTL: TTL,
-				}
-				for name, addr := range s.services {
-					key := fullKey(name, addr)
-					p.SetArgs(context.Background(), key, "", args)
+		if len(s.registered) > 0 && !s.stopped.Load() {
+			cmds, _ := s.redis.TxPipelined(context.Background(), func(p redis.Pipeliner) error {
+				for name, addr := range s.registered {
+					key := fullKey(name)
+					p.HSet(context.Background(), key, addr, "")
+					p.HExpire(context.Background(), key, TTL, addr)
 				}
 				return nil
 			})
 			if s.stopped.Load() { // race
 				s.unregister()
 			} else {
-				for _, cmd := range cmds {
-					statusCmd := cmd.(*redis.StatusCmd)
-					if _, err := statusCmd.Result(); errors.Is(err, redis.Nil) {
-						log.Info("publish ", s.services)
+				for i := 0; i < len(cmds); i += 2 {
+					intCmd := cmds[i].(*redis.IntCmd)
+					if added, err := intCmd.Result(); err == nil && added == 1 {
+						log.Info("publish ", s.registered)
 						s.redis.Publish(context.Background(), Prefix, "register")
 						break
 					}
@@ -160,7 +143,7 @@ func (s *Registry) run() {
 		}
 		s.refresh()
 		timeout := RefreshInterval
-		for i := 0; i < 100; i++ { // receive up to 100
+		for {
 			if m, err := sub.ReceiveTimeout(context.Background(), timeout); err != nil {
 				var netErr net.Error
 				if !(errors.As(err, &netErr) && netErr.Timeout()) {
