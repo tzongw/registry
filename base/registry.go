@@ -27,7 +27,7 @@ type Registry struct {
 	services     []string
 	registered   map[string]string
 	stopped      atomic.Bool
-	m            sync.Mutex
+	mu           sync.Mutex
 	serviceMap   ServiceMap
 	afterRefresh []func()
 }
@@ -58,8 +58,8 @@ func (s *Registry) Stop() {
 }
 
 func (s *Registry) Addresses(name string) sort.StringSlice {
-	s.m.Lock()
-	defer s.m.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.serviceMap[name]
 }
 
@@ -99,8 +99,8 @@ func (s *Registry) refresh() {
 			sm[name] = keys
 		}
 	}
-	s.m.Lock()
-	defer s.m.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !reflect.DeepEqual(sm, s.serviceMap) {
 		log.Infof("update %+v -> %+v", s.serviceMap, sm)
 		s.serviceMap = sm
@@ -111,9 +111,9 @@ func (s *Registry) refresh() {
 }
 
 func (s *Registry) AddCallback(cb func()) {
-	s.m.Lock()
+	s.mu.Lock()
 	s.afterRefresh = append(s.afterRefresh, cb)
-	s.m.Unlock()
+	s.mu.Unlock()
 }
 
 func (s *Registry) run() {

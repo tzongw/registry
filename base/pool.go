@@ -32,7 +32,7 @@ type Pool[T any] struct {
 	size    int
 	queue   int
 	closed  bool
-	m       sync.Mutex
+	mu      sync.Mutex
 }
 
 func NewPool[T any](factory Factory[T], opt Options) *Pool[T] {
@@ -43,8 +43,8 @@ func NewPool[T any](factory Factory[T], opt Options) *Pool[T] {
 }
 
 func (p *Pool[T]) Close() {
-	p.m.Lock()
-	defer p.m.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.closed = true
 	for {
 		select {
@@ -57,19 +57,19 @@ func (p *Pool[T]) Close() {
 }
 
 func (p *Pool[T]) Get() (T, error) {
-	p.m.Lock()
+	p.mu.Lock()
 	if p.queue == 0 && len(p.idleC) > 0 {
-		defer p.m.Unlock()
+		defer p.mu.Unlock()
 		return <-p.idleC, nil // NEVER block
 	} else if p.size >= p.opt.PoolSize {
 		p.queue++
-		p.m.Unlock()
+		p.mu.Unlock()
 		t := time.NewTimer(p.opt.Timeout)
 		defer func() {
 			t.Stop()
-			p.m.Lock()
+			p.mu.Lock()
 			p.queue--
-			p.m.Unlock()
+			p.mu.Unlock()
 		}()
 		select {
 		case i := <-p.idleC:
@@ -80,20 +80,20 @@ func (p *Pool[T]) Get() (T, error) {
 		}
 	} else {
 		p.size++
-		p.m.Unlock() // Open may slow
+		p.mu.Unlock() // Open may slow
 		i, err := p.factory.Open()
 		if err != nil {
-			p.m.Lock()
+			p.mu.Lock()
 			p.size--
-			p.m.Unlock()
+			p.mu.Unlock()
 		}
 		return i, err
 	}
 }
 
 func (p *Pool[T]) Put(i T, err error) {
-	p.m.Lock()
-	defer p.m.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if err != nil || p.closed {
 		_ = p.factory.Close(i)
 		p.size--

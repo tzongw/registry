@@ -81,7 +81,7 @@ type ServiceClient struct {
 	service        string
 	registry       *Registry
 	opt            Options
-	m              sync.Mutex
+	mu             sync.Mutex
 	clients        map[string]*AddrClient
 	localAddresses sort.StringSlice
 	goodAddresses  sort.StringSlice
@@ -104,9 +104,9 @@ func (c *ServiceClient) reapCoolDown() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		c.m.Lock()
+		c.mu.Lock()
 		count := len(c.coolDown)
-		c.m.Unlock()
+		c.mu.Unlock()
 		if count > 0 {
 			c.updateAddresses()
 		}
@@ -116,8 +116,8 @@ func (c *ServiceClient) reapCoolDown() {
 func (c *ServiceClient) updateAddresses() {
 	log.Infof("update %+v", c.service)
 	addresses := c.registry.Addresses(c.service)
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	now := time.Now()
 	for addr, cd := range c.coolDown {
 		if now.After(cd) {
@@ -146,10 +146,10 @@ func (c *ServiceClient) updateAddresses() {
 }
 
 func (c *ServiceClient) addCoolDown(addr string) {
-	c.m.Lock()
+	c.mu.Lock()
 	_, ok := c.coolDown[addr]
 	c.coolDown[addr] = time.Now().Add(CoolDown)
-	c.m.Unlock()
+	c.mu.Unlock()
 	if !ok {
 		log.Warnf("+ cool down %+v %+v", c.service, addr)
 		c.updateAddresses()
@@ -173,8 +173,8 @@ func Broadcast(ctx context.Context) context.Context {
 }
 
 func (c *ServiceClient) preferredAddresses() sort.StringSlice {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if len(c.localAddresses) > 0 {
 		return c.localAddresses
 	}
@@ -236,8 +236,8 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 }
 
 func (c *ServiceClient) client(addr string) *AddrClient {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	client, ok := c.clients[addr]
 	if !ok {
 		client = NewAddrClient(addr, c.opt)
