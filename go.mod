@@ -6,7 +6,7 @@ require (
 	github.com/apache/thrift v0.13.0
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/websocket v1.4.1
-	github.com/redis/go-redis/v9 v9.0.0-20240620083026-da8623ecea1f
+	github.com/redis/go-redis/v9 v9.5.4-0.20240711085756-8a0c59b10180
 	github.com/sirupsen/logrus v1.9.0
 )
 
@@ -16,5 +16,3 @@ require (
 	github.com/stretchr/testify v1.8.1 // indirect
 	golang.org/x/sys v0.2.0 // indirect
 )
-
-replace github.com/redis/go-redis/v9 => ../go-redis
