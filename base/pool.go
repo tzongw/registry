@@ -50,6 +50,7 @@ func (p *Pool[T]) Close() {
 		select {
 		case i := <-p.idleC:
 			_ = p.factory.Close(i)
+			p.size--
 		default:
 			return
 		}
