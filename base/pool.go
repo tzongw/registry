@@ -128,9 +128,9 @@ func (p *Pool[T]) Put(item T, err error) {
 	}
 	elem := Elem[T]{item: item}
 	if p.opt.Stale > 0 {
-		if p.timers.Size() > 0 {
-			elem.stale = p.timers.Dequeue()
-			elem.stale.Reset(p.opt.Stale)
+		if stale, ok := p.timers.Dequeue(); ok {
+			elem.stale = stale
+			stale.Reset(p.opt.Stale)
 		} else {
 			elem.stale = time.AfterFunc(p.opt.Stale, p.reapStale)
 		}

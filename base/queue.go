@@ -30,17 +30,14 @@ func (q *CircularQueue[T]) Enqueue(item T) {
 	q.rear = (q.rear + 1) % size
 }
 
-func (q *CircularQueue[T]) Dequeue() T {
+func (q *CircularQueue[T]) Dequeue() (item T, ok bool) {
 	if q.front == q.rear { // empty
-		panic("queue is empty")
+		return
 	}
-	item := q.items[q.front]
-	size := len(q.items)
-	q.front = (q.front + 1) % size
-	return item
-}
-
-func (q *CircularQueue[T]) Size() int {
-	size := len(q.items)
-	return (q.rear + size - q.front) % size
+	item = q.items[q.front]
+	ok = true
+	var empty T
+	q.items[q.front] = empty
+	q.front = (q.front + 1) % len(q.items)
+	return
 }
