@@ -59,7 +59,7 @@ func (p *Pool[T]) Close() {
 
 func (p *Pool[T]) Get() (T, error) {
 	p.mu.Lock()
-	if p.queue == 0 && len(p.idleC) > 0 {
+	if len(p.idleC) > p.queue {
 		defer p.mu.Unlock()
 		return <-p.idleC, nil // NEVER block
 	} else if p.size >= p.opt.PoolSize {
