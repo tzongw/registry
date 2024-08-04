@@ -41,3 +41,42 @@ func (q *CircularQueue[T]) Dequeue() (item T, ok bool) {
 	q.front = (q.front + 1) % len(q.items)
 	return
 }
+
+type Channel[T any] struct {
+	items []T
+	ch    chan T
+}
+
+func NewChannel[T any]() *Channel[T] {
+	return &Channel[T]{
+		ch: make(chan T, 1),
+	}
+}
+
+func (c *Channel[T]) Put(item T) {
+	if len(c.items) == 0 {
+		select {
+		case c.ch <- item:
+			return
+		default:
+		}
+	}
+	c.items = append(c.items, item)
+}
+
+func (c *Channel[T]) Load() {
+	if len(c.items) == 0 {
+		return
+	}
+	select {
+	case c.ch <- c.items[0]:
+		var empty T
+		c.items[0] = empty
+		c.items = c.items[1:]
+	default:
+	}
+}
+
+func (c *Channel[T]) Get() <-chan T {
+	return c.ch
+}
