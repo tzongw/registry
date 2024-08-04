@@ -16,7 +16,6 @@ type Factory[T any] interface {
 type Options struct {
 	PoolSize int
 	Timeout  time.Duration
-	Stale    time.Duration
 }
 
 func PoolDefaultOptions() Options {
@@ -26,32 +25,21 @@ func PoolDefaultOptions() Options {
 	}
 }
 
-type Elem[T any] struct {
-	item  T
-	stale *time.Timer
-}
-
 type Pool[T any] struct {
 	factory Factory[T]
 	opt     Options
-	idle    chan Elem[T]
-	timers  *CircularQueue[*time.Timer]
+	idle    *Channel[T]
 	size    int
-	queue   int
+	waiting int
 	closed  bool
 	mu      sync.Mutex
 }
 
 func NewPool[T any](factory Factory[T], opt Options) *Pool[T] {
-	p := &Pool[T]{
+	return &Pool[T]{
 		factory: factory,
 		opt:     opt,
-		idle:    make(chan Elem[T], opt.PoolSize),
-	}
-	if opt.Stale > 0 {
-		p.timers = NewCircularQueue[*time.Timer](opt.PoolSize)
-	}
-	return p
+		idle:    NewChannel[T]()}
 }
 
 func (p *Pool[T]) Close() {
@@ -60,12 +48,9 @@ func (p *Pool[T]) Close() {
 	p.closed = true
 	for {
 		select {
-		case elem := <-p.idle:
-			if elem.stale != nil {
-				elem.stale.Stop()
-				p.timers.Enqueue(elem.stale)
-			}
-			_ = p.factory.Close(elem.item)
+		case i := <-p.idle.Get():
+			p.idle.Load()
+			_ = p.factory.Close(i)
 			p.size--
 		default:
 			return
@@ -73,80 +58,51 @@ func (p *Pool[T]) Close() {
 	}
 }
 
-func (p *Pool[T]) Get() (T, error) {
+func (p *Pool[T]) Get() (i T, err error) {
 	p.mu.Lock()
-	if p.queue == 0 && len(p.idle) > 0 {
-		defer p.mu.Unlock()
-		elem := <-p.idle // NEVER block
-		if elem.stale != nil {
-			elem.stale.Stop()
-			p.timers.Enqueue(elem.stale)
-		}
-		return elem.item, nil
-	} else if p.size >= p.opt.PoolSize {
-		p.queue++
+	ch := p.idle.Get()
+	if p.waiting == 0 && len(ch) > 0 {
+		i = <-ch // NEVER block
+		p.idle.Load()
 		p.mu.Unlock()
-		var elem Elem[T]
-		defer func() {
-			p.mu.Lock()
-			p.queue--
-			if elem.stale != nil {
-				elem.stale.Stop()
-				p.timers.Enqueue(elem.stale)
-			}
-			p.mu.Unlock()
-		}()
+	} else if p.size >= p.opt.PoolSize {
+		p.waiting++
+		p.mu.Unlock()
 		t := time.NewTimer(p.opt.Timeout)
-		select {
-		case elem = <-p.idle:
+		select { // WITHOUT lock
+		case i = <-ch:
 			t.Stop()
-			return elem.item, nil
+			p.mu.Lock()
+			p.waiting--
+			p.idle.Load()
+			p.mu.Unlock()
 		case <-t.C:
 			var empty T
-			return empty, ErrTimeout
+			i, err = empty, ErrTimeout
+			p.mu.Lock()
+			p.waiting--
+			p.mu.Unlock()
 		}
 	} else {
 		p.size++
 		p.mu.Unlock() // Open may slow
-		item, err := p.factory.Open()
+		i, err = p.factory.Open()
 		if err != nil {
 			p.mu.Lock()
 			p.size--
 			p.mu.Unlock()
 		}
-		return item, err
 	}
+	return
 }
 
-func (p *Pool[T]) Put(item T, err error) {
+func (p *Pool[T]) Put(i T, err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err != nil || p.closed {
-		_ = p.factory.Close(item)
+		_ = p.factory.Close(i)
 		p.size--
 		return
 	}
-	elem := Elem[T]{item: item}
-	if p.opt.Stale > 0 {
-		if stale, ok := p.timers.Dequeue(); ok {
-			elem.stale = stale
-			stale.Reset(p.opt.Stale)
-		} else {
-			elem.stale = time.AfterFunc(p.opt.Stale, p.reapStale)
-		}
-	}
-	p.idle <- elem
-}
-
-func (p *Pool[T]) reapStale() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	select {
-	case elem := <-p.idle:
-		elem.stale.Stop()
-		p.timers.Enqueue(elem.stale)
-		_ = p.factory.Close(elem.item)
-		p.size--
-	default:
-	}
+	p.idle.Put(i)
 }
