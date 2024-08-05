@@ -65,15 +65,15 @@ func (p *Pool[T]) Get() (T, error) {
 	} else if p.size >= p.opt.PoolSize {
 		p.queue++
 		p.mu.Unlock()
-		t := time.NewTimer(p.opt.Timeout)
 		defer func() {
-			t.Stop()
 			p.mu.Lock()
 			p.queue--
 			p.mu.Unlock()
 		}()
+		t := time.NewTimer(p.opt.Timeout)
 		select {
 		case i := <-p.idleC:
+			t.Stop()
 			return i, nil
 		case <-t.C:
 			var empty T
