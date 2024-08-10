@@ -92,12 +92,9 @@ func (s *Registry) refresh() {
 	for i, cmd := range cmds {
 		name := s.services[i]
 		hkeysCmd := cmd.(*redis.StringSliceCmd)
-		if keys, err := hkeysCmd.Result(); err != nil {
-			log.Error(err)
-		} else {
-			sort.Strings(keys) // DeepEqual needs
-			sm[name] = keys
-		}
+		keys := hkeysCmd.Val()
+		sort.Strings(keys) // DeepEqual needs
+		sm[name] = keys
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
