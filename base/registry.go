@@ -23,7 +23,7 @@ const (
 type ServiceMap map[string]sort.StringSlice
 
 type Registry struct {
-	redis        *redis.Client
+	redis        *redis.ClusterClient
 	services     []string
 	registered   map[string]string
 	stopped      atomic.Bool
@@ -36,7 +36,7 @@ func fullKey(name string) string {
 	return Prefix + ":" + name
 }
 
-func NewRegistry(redis *redis.Client, services []string) *Registry {
+func NewRegistry(redis *redis.ClusterClient, services []string) *Registry {
 	return &Registry{
 		redis:    redis,
 		services: services,
