@@ -7,12 +7,12 @@ import (
 	"github.com/tzongw/registry/gen-go/service"
 )
 
-type tUserClient struct {
+type TUserClient struct {
 	*base.ServiceClient
 	*service.UserClient
 }
 
-type tGateClient struct {
+type TGateClient struct {
 	*base.ServiceClient
 	*service.GateClient
 }
@@ -20,25 +20,25 @@ type tGateClient struct {
 var (
 	Redis      *redis.Client
 	Registry   *base.Registry
-	UserClient *tUserClient
-	GateClient *tGateClient
+	UserClient *TUserClient
+	GateClient *TGateClient
 )
 
-func NewUserClient(c *base.ServiceClient) *tUserClient {
-	return &tUserClient{
+func NewUserClient(c *base.ServiceClient) *TUserClient {
+	return &TUserClient{
 		ServiceClient: c,
 		UserClient:    service.NewUserClient(c),
 	}
 }
 
-func NewGateClient(c *base.ServiceClient) *tGateClient {
-	return &tGateClient{
+func NewGateClient(c *base.ServiceClient) *TGateClient {
+	return &TGateClient{
 		ServiceClient: c,
 		GateClient:    service.NewGateClient(c),
 	}
 }
 
-func (c *tGateClient) ConnClient(addr string, f func(gate service.Gate) error) error {
+func (c *TGateClient) ConnClient(addr string, f func(gate service.Gate) error) error {
 	return c.ServiceClient.ConnClient(addr, func(conn thrift.TClient) error {
 		return f(service.NewGateClient(conn))
 	})
