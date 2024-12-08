@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	readWait       = 3 * common.PingInterval
+	readWait       = common.WsTimeout
 	writeWait      = time.Second
 	maxMessageSize = 100 * 1024
 	groupShards    = 29 // prime number for pointer hash
