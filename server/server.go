@@ -19,7 +19,7 @@ const (
 	groupShards    = 29 // prime number for pointer hash
 )
 
-var clients = base.NewMap[string, *Client](base.StringHash[string], 512)
+var clients = base.NewMap[string, *Client](base.StringHash[string], 1024)
 
 var errNotExist = errors.New("not exist")
 
@@ -38,6 +38,7 @@ type message struct {
 }
 
 var messagePool = sync.Pool{New: func() any { return &message{recyclable: true} }}
+var pongMessage = &message{typ: websocket.PongMessage}
 
 type Client struct {
 	id       string
@@ -67,7 +68,7 @@ func (c *Client) Serve() {
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetPingHandler(func(appData string) error {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
-		c.rpcPing(ctx)
+		c.handlePing(ctx)
 		return nil
 	})
 	_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
@@ -98,7 +99,8 @@ func (c *Client) Stop() {
 	c.sendMessage(nil)
 }
 
-func (c *Client) rpcPing(ctx context.Context) {
+func (c *Client) handlePing(ctx context.Context) {
+	c.sendMessage(pongMessage)
 	c.step++
 	if c.step < common.RpcPingStep {
 		return
