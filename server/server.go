@@ -19,7 +19,7 @@ const (
 	groupShards    = 29 // prime number for pointer hash
 )
 
-var clients = base.NewMap[string, *Client](base.StringHash[string], 1024)
+var clients = base.NewMap[string, *Client](base.StringHash[string], 512)
 
 var errNotExist = errors.New("not exist")
 
@@ -273,6 +273,15 @@ func broadcastBinary(group string, exclude []string, content []byte) {
 }
 
 func broadcastMessage(group string, exclude []string, msg *message) {
+	if group == "" { // broadcast to all clients
+		go clients.Range(func(_ string, c *Client) bool {
+			if !base.Contains(exclude, c.id) {
+				c.sendMessage(msg)
+			}
+			return true
+		})
+		return
+	}
 	g, ok := groups.Load(group)
 	if !ok {
 		return
