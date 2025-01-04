@@ -178,10 +178,7 @@ func (c *ServiceClient) preferredAddresses() sort.StringSlice {
 	if len(c.localAddresses) > 0 {
 		return c.localAddresses
 	}
-	if len(c.goodAddresses) > 0 {
-		return c.goodAddresses
-	}
-	return c.registry.Addresses(c.service)
+	return c.goodAddresses
 }
 
 func (c *ServiceClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
@@ -208,6 +205,9 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 	var addr string
 	if strings.HasPrefix(value, "addr:") {
 		addr = value[5:]
+		if _, ok := c.coolDown[addr]; ok && !Contains(c.registry.Addresses(c.service), addr) {
+			return ErrUnavailable // cooling down unhealthy address
+		}
 	} else {
 		addresses := c.preferredAddresses()
 		if len(addresses) == 0 {
