@@ -2,6 +2,7 @@ package base
 
 import (
 	"hash/fnv"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -110,7 +111,12 @@ func (m *Map[K, V]) Load(k K) (v V, ok bool) {
 }
 
 func (m *Map[K, V]) Range(f func(k K, v V) bool) {
+	done := 0
 	for i := 0; i < len(m.shards); i++ {
+		if done >= 2048 {
+			done = 0
+			runtime.Gosched()
+		}
 		shard := &m.shards[i]
 		shard.mu.RLock()
 		for k, v := range shard.m {
@@ -119,6 +125,7 @@ func (m *Map[K, V]) Range(f func(k K, v V) bool) {
 				return
 			}
 		}
+		done += len(shard.m)
 		shard.mu.RUnlock()
 	}
 }
