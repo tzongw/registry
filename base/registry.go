@@ -150,7 +150,11 @@ func (s *Registry) run() {
 				break
 			} else {
 				log.Debug(m)
-				timeout = time.Millisecond // timeout 0 will block forever
+				if timeout == RefreshInterval { // first msg
+					timeout = 10 * time.Millisecond
+				} else {
+					timeout = time.Nanosecond // timeout 0 will block forever
+				}
 			}
 		}
 	}

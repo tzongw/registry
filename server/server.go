@@ -100,7 +100,8 @@ func (c *Client) Stop() {
 }
 
 func (c *Client) handlePing(ctx context.Context) {
-	c.sendMessage(pongMessage)
+	// pong or no pong?
+	// c.sendMessage(pongMessage)
 	c.step++
 	if c.step < common.RpcPingStep {
 		return
