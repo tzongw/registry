@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -18,8 +17,6 @@ const (
 	wsURL = "ws://localhost:18080/ws"
 	// 压测的并发数
 	concurrentConnections = 20000
-	// 每个连接发送的消息数量
-	messagesPerConnection = 10000
 )
 
 // 客户端连接结构体
@@ -36,7 +33,7 @@ func (c *Client) readMessage(id int) {
 	for {
 		_, s, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Printf("client %d: dial error: %v", id, err)
+			log.Printf("client %d: exit", id)
 			return
 		}
 		log.Printf("client %d: recv: %s", id, s)
@@ -44,7 +41,7 @@ func (c *Client) readMessage(id int) {
 }
 
 // 客户端逻辑
-func clientRoutine(ctx context.Context, id int) {
+func clientRoutine(ctx context.Context, id int, stop chan struct{}) {
 	url := fmt.Sprintf("%s?uid=%d&token=token", wsURL, id)
 	c, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
 	if err != nil {
@@ -56,12 +53,18 @@ func clientRoutine(ctx context.Context, id int) {
 	client := &Client{conn: c}
 	go client.readMessage(id)
 	time.Sleep(time.Second)
-	for i := 0; i < messagesPerConnection; i++ {
-		if err := client.sendMessage(websocket.PingMessage, "ping"); err != nil {
-			log.Printf("client %d: ping error: %v", id, err)
+	t := time.NewTicker(common.PingInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-stop:
 			return
+		case <-t.C:
+			if err := client.sendMessage(websocket.PingMessage, "ping"); err != nil {
+				log.Printf("client %d: ping error: %v", id, err)
+				return
+			}
 		}
-		time.Sleep(common.PingInterval)
 	}
 }
 
@@ -69,19 +72,23 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var wg sync.WaitGroup
+	m := make(map[int]chan struct{}, concurrentConnections)
 	for i := 0; i < concurrentConnections; i++ {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
-			clientRoutine(ctx, id)
-		}(i)
+		stop := make(chan struct{})
+		m[i] = stop
+		go clientRoutine(ctx, i, stop)
 		if i%100 == 0 {
 			time.Sleep(1 * time.Second)
 		}
 	}
-	wg.Wait()
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	<-ch
+	for i := 0; i < concurrentConnections; i++ {
+		stop := m[i]
+		close(stop)
+		if i%100 == 0 {
+			time.Sleep(1 * time.Second)
+		}
+	}
 }
