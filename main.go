@@ -1,44 +1,75 @@
 package main
 
 import (
-	"flag"
-	log "github.com/sirupsen/logrus"
+	"context"
+	"fmt"
+	"github.com/gorilla/websocket"
 	"github.com/tzongw/registry/common"
-	"github.com/tzongw/registry/server"
-	"net/http"
-	_ "net/http/pprof"
+	"log"
 	"os"
 	"os/signal"
-	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
 
-var debug = flag.Bool("debug", false, "debug state")
-var addr = flag.String("addr", ":0", "ws service address")
+const (
+	// WebSocket 服务器的地址
+	wsURL = "ws://localhost:18080/ws"
+	// 压测的并发数
+	concurrentConnections = 1000
+	// 每个连接发送的消息数量
+	messagesPerConnection = 10000
+)
+
+// 客户端连接结构体
+type Client struct {
+	conn *websocket.Conn
+}
+
+// 发送消息到 WebSocket 服务器
+func (c *Client) sendMessage(message string) error {
+	return c.conn.WriteMessage(websocket.TextMessage, []byte(message))
+}
+
+// 客户端逻辑
+func clientRoutine(ctx context.Context, id int) {
+	c, _, err := websocket.DefaultDialer.DialContext(ctx, wsURL, nil)
+	if err != nil {
+		log.Printf("client %d: dial error: %v", id, err)
+		return
+	}
+	defer c.Close()
+
+	client := &Client{conn: c}
+
+	for i := 0; i < messagesPerConnection; i++ {
+		message := fmt.Sprintf("message %d from client %d", i, id)
+		if err := client.sendMessage(message); err != nil {
+			log.Printf("client %d: send error: %v", id, err)
+			return
+		}
+		time.Sleep(common.PingInterval) // 模拟发送间隔
+	}
+}
 
 func main() {
-	flag.Parse()
-	if *debug {
-		log.SetLevel(log.DebugLevel)
-		go http.ListenAndServe("localhost:6060", nil)
-	} else {
-		log.SetLevel(log.InfoLevel)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for i := 0; i < concurrentConnections; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			clientRoutine(ctx, id)
+		}(i)
+		if i%100 == 0 {
+			time.Sleep(1 * time.Second)
+		}
 	}
-	common.InitShared()
-	log.SetReportCaller(true)
-	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
-	common.Registry.Start(map[string]string{
-		common.RpcGate: server.RpcServe(),
-		common.WsGate:  server.WsServe(*addr),
-	})
+	wg.Wait()
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	<-ch
-	common.Registry.Stop()
-	time.Sleep(time.Second) // wait requests done
-	if strings.HasPrefix(*addr, "/") {
-		_ = os.Remove(*addr)
-	}
-	log.Info("exit")
 }
