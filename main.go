@@ -17,7 +17,7 @@ const (
 	// WebSocket 服务器的地址
 	wsURL = "ws://localhost:18080/ws"
 	// 压测的并发数
-	concurrentConnections = 1
+	concurrentConnections = 5000
 	// 每个连接发送的消息数量
 	messagesPerConnection = 10000
 )
@@ -33,14 +33,15 @@ func (c *Client) sendMessage(message string) error {
 }
 
 func (c *Client) readMessage() string {
-	_ = c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	_ = c.conn.SetReadDeadline(time.Now().Add(common.PingInterval))
 	_, content, _ := c.conn.ReadMessage()
 	return string(content)
 }
 
 // 客户端逻辑
 func clientRoutine(ctx context.Context, id int) {
-	c, _, err := websocket.DefaultDialer.DialContext(ctx, wsURL, nil)
+	url := fmt.Sprintf("%s?uid=%d", wsURL, id)
+	c, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
 	if err != nil {
 		log.Printf("client %d: dial error: %v", id, err)
 		return
@@ -59,7 +60,6 @@ func clientRoutine(ctx context.Context, id int) {
 		if s != "" {
 			log.Printf("client %d: recv: %s", id, s)
 		}
-		time.Sleep(common.PingInterval) // 模拟发送间隔
 	}
 }
 
@@ -74,7 +74,7 @@ func main() {
 			defer wg.Done()
 			clientRoutine(ctx, id)
 		}(i)
-		if i%100 == 0 {
+		if i%500 == 0 {
 			time.Sleep(1 * time.Second)
 		}
 	}
