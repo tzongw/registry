@@ -17,7 +17,7 @@ const (
 	// WebSocket 服务器的地址
 	wsURL = "ws://localhost:18080/ws"
 	// 压测的并发数
-	concurrentConnections = 1000
+	concurrentConnections = 1
 	// 每个连接发送的消息数量
 	messagesPerConnection = 10000
 )
@@ -30,6 +30,12 @@ type Client struct {
 // 发送消息到 WebSocket 服务器
 func (c *Client) sendMessage(message string) error {
 	return c.conn.WriteMessage(websocket.TextMessage, []byte(message))
+}
+
+func (c *Client) readMessage() string {
+	_ = c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	_, content, _ := c.conn.ReadMessage()
+	return string(content)
 }
 
 // 客户端逻辑
@@ -48,6 +54,10 @@ func clientRoutine(ctx context.Context, id int) {
 		if err := client.sendMessage(message); err != nil {
 			log.Printf("client %d: send error: %v", id, err)
 			return
+		}
+		s := client.readMessage()
+		if s != "" {
+			log.Printf("client %d: recv: %s", id, s)
 		}
 		time.Sleep(common.PingInterval) // 模拟发送间隔
 	}
