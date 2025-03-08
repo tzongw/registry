@@ -17,7 +17,7 @@ const (
 	// WebSocket 服务器的地址
 	wsURL = "ws://localhost:18080/ws"
 	// 压测的并发数
-	concurrentConnections = 5000
+	concurrentConnections = 20000
 	// 每个连接发送的消息数量
 	messagesPerConnection = 10000
 )
