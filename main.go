@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -16,13 +17,15 @@ const (
 	// WebSocket 服务器的地址
 	wsURL = "ws://localhost:18080/ws"
 	// 压测的并发数
-	concurrentConnections = 20000
+	concurrentConnections = 15000
 )
 
 // 客户端连接结构体
 type Client struct {
 	conn *websocket.Conn
 }
+
+var wg sync.WaitGroup
 
 // 发送消息到 WebSocket 服务器
 func (c *Client) sendMessage(typ int, message string) error {
@@ -41,7 +44,8 @@ func (c *Client) readMessage(id int) {
 }
 
 // 客户端逻辑
-func clientRoutine(ctx context.Context, id int, stop chan struct{}) {
+func clientRoutine(ctx context.Context, id int) {
+	defer wg.Done()
 	url := fmt.Sprintf("%s?uid=%d&token=token", wsURL, id)
 	c, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
 	if err != nil {
@@ -57,7 +61,7 @@ func clientRoutine(ctx context.Context, id int, stop chan struct{}) {
 	defer t.Stop()
 	for {
 		select {
-		case <-stop:
+		case <-ctx.Done():
 			return
 		case <-t.C:
 			if err := client.sendMessage(websocket.PingMessage, "ping"); err != nil {
@@ -72,11 +76,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	m := make(map[int]chan struct{}, concurrentConnections)
+	m := make(map[int]context.CancelFunc, concurrentConnections)
+	wg.Add(concurrentConnections)
 	for i := 0; i < concurrentConnections; i++ {
-		stop := make(chan struct{})
-		m[i] = stop
-		go clientRoutine(ctx, i, stop)
+		withCancel, cancel := context.WithCancel(ctx)
+		m[i] = cancel
+		go clientRoutine(withCancel, i)
 		if i%100 == 0 {
 			time.Sleep(1 * time.Second)
 		}
@@ -85,10 +90,11 @@ func main() {
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	<-ch
 	for i := 0; i < concurrentConnections; i++ {
-		stop := m[i]
-		close(stop)
+		cancel := m[i]
+		cancel()
 		if i%100 == 0 {
 			time.Sleep(1 * time.Second)
 		}
 	}
+	wg.Wait()
 }
