@@ -17,7 +17,7 @@ const (
 	// WebSocket 服务器的地址
 	wsURL = "ws://localhost:18080/ws"
 	// 压测的并发数
-	concurrentConnections = 5000
+	concurrentConnections = 2000
 	// 每个连接发送的消息数量
 	messagesPerConnection = 10000
 )
@@ -29,7 +29,7 @@ type Client struct {
 
 // 发送消息到 WebSocket 服务器
 func (c *Client) sendMessage(typ int, message string) error {
-	return c.conn.WriteMessage(websocket.TextMessage, []byte(message))
+	return c.conn.WriteMessage(typ, []byte(message))
 }
 
 func (c *Client) readMessage() string {
@@ -49,8 +49,15 @@ func clientRoutine(ctx context.Context, id int) {
 	defer c.Close()
 
 	client := &Client{conn: c}
-	time.Sleep(100 * time.Millisecond)
 	for i := 0; i < messagesPerConnection; i++ {
+		for {
+			s := client.readMessage()
+			if s == "" {
+				break
+			}
+			log.Printf("client %d: recv: %s", id, s)
+		}
+		time.Sleep(common.PingInterval)
 		if i == 0 {
 			if err := client.sendMessage(websocket.TextMessage, "join"); err != nil {
 				log.Printf("client %d: send error: %v", id, err)
@@ -62,14 +69,6 @@ func clientRoutine(ctx context.Context, id int) {
 				return
 			}
 		}
-		for {
-			s := client.readMessage()
-			if s == "" {
-				break
-			}
-			log.Printf("client %d: recv: %s", id, s)
-		}
-		time.Sleep(common.PingInterval)
 	}
 }
 
@@ -84,7 +83,7 @@ func main() {
 			defer wg.Done()
 			clientRoutine(ctx, id)
 		}(i)
-		if i%200 == 0 {
+		if i%100 == 0 {
 			time.Sleep(1 * time.Second)
 		}
 	}
