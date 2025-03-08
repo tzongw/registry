@@ -28,19 +28,19 @@ type Client struct {
 }
 
 // 发送消息到 WebSocket 服务器
-func (c *Client) sendMessage(message string) error {
+func (c *Client) sendMessage(typ int, message string) error {
 	return c.conn.WriteMessage(websocket.TextMessage, []byte(message))
 }
 
 func (c *Client) readMessage() string {
-	_ = c.conn.SetReadDeadline(time.Now().Add(common.PingInterval))
+	_ = c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	_, content, _ := c.conn.ReadMessage()
 	return string(content)
 }
 
 // 客户端逻辑
 func clientRoutine(ctx context.Context, id int) {
-	url := fmt.Sprintf("%s?uid=%d", wsURL, id)
+	url := fmt.Sprintf("%s?uid=%d&token=token", wsURL, id)
 	c, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
 	if err != nil {
 		log.Printf("client %d: dial error: %v", id, err)
@@ -49,17 +49,27 @@ func clientRoutine(ctx context.Context, id int) {
 	defer c.Close()
 
 	client := &Client{conn: c}
-
+	time.Sleep(100 * time.Millisecond)
 	for i := 0; i < messagesPerConnection; i++ {
-		message := fmt.Sprintf("message %d from client %d", i, id)
-		if err := client.sendMessage(message); err != nil {
-			log.Printf("client %d: send error: %v", id, err)
-			return
+		if i == 0 {
+			if err := client.sendMessage(websocket.TextMessage, "join"); err != nil {
+				log.Printf("client %d: send error: %v", id, err)
+				return
+			}
+		} else {
+			if err := client.sendMessage(websocket.PingMessage, "ping"); err != nil {
+				log.Printf("client %d: ping error: %v", id, err)
+				return
+			}
 		}
-		s := client.readMessage()
-		if s != "" {
+		for {
+			s := client.readMessage()
+			if s == "" {
+				break
+			}
 			log.Printf("client %d: recv: %s", id, s)
 		}
+		time.Sleep(common.PingInterval)
 	}
 }
 
@@ -74,7 +84,7 @@ func main() {
 			defer wg.Done()
 			clientRoutine(ctx, id)
 		}(i)
-		if i%500 == 0 {
+		if i%200 == 0 {
 			time.Sleep(1 * time.Second)
 		}
 	}
