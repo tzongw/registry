@@ -17,7 +17,7 @@ const (
 	// WebSocket 服务器的地址
 	wsURL = "ws://localhost:18080/ws"
 	// 压测的并发数
-	concurrentConnections = 2000
+	concurrentConnections = 5000
 	// 每个连接发送的消息数量
 	messagesPerConnection = 10000
 )
@@ -32,10 +32,15 @@ func (c *Client) sendMessage(typ int, message string) error {
 	return c.conn.WriteMessage(typ, []byte(message))
 }
 
-func (c *Client) readMessage() string {
-	_ = c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-	_, content, _ := c.conn.ReadMessage()
-	return string(content)
+func (c *Client) readMessage(id int) {
+	for {
+		_, s, err := c.conn.ReadMessage()
+		if err != nil {
+			log.Printf("client %d: dial error: %v", id, err)
+			return
+		}
+		log.Printf("client %d: recv: %s", id, s)
+	}
 }
 
 // 客户端逻辑
@@ -49,26 +54,14 @@ func clientRoutine(ctx context.Context, id int) {
 	defer c.Close()
 
 	client := &Client{conn: c}
+	go client.readMessage(id)
+	time.Sleep(time.Second)
 	for i := 0; i < messagesPerConnection; i++ {
-		for {
-			s := client.readMessage()
-			if s == "" {
-				break
-			}
-			log.Printf("client %d: recv: %s", id, s)
+		if err := client.sendMessage(websocket.PingMessage, "ping"); err != nil {
+			log.Printf("client %d: ping error: %v", id, err)
+			return
 		}
 		time.Sleep(common.PingInterval)
-		if i == 0 {
-			if err := client.sendMessage(websocket.TextMessage, "join"); err != nil {
-				log.Printf("client %d: send error: %v", id, err)
-				return
-			}
-		} else {
-			if err := client.sendMessage(websocket.PingMessage, "ping"); err != nil {
-				log.Printf("client %d: ping error: %v", id, err)
-				return
-			}
-		}
 	}
 }
 
