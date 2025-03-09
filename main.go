@@ -73,15 +73,12 @@ func clientRoutine(ctx context.Context, id int) {
 }
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	m := make(map[int]context.CancelFunc, concurrentConnections)
 	wg.Add(concurrentConnections)
 	for i := 0; i < concurrentConnections; i++ {
-		withCancel, cancel := context.WithCancel(ctx)
+		ctx, cancel := context.WithCancel(context.Background())
 		m[i] = cancel
-		go clientRoutine(withCancel, i)
+		go clientRoutine(ctx, i)
 		if i%100 == 0 {
 			time.Sleep(1 * time.Second)
 		}
