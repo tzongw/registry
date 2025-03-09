@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/tzongw/registry/common"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"sync"
@@ -56,7 +57,8 @@ func clientRoutine(ctx context.Context, id int) {
 	client := &Client{conn: c}
 	go client.readMessage(id)
 	time.Sleep(time.Second)
-	t := time.NewTicker(common.PingInterval)
+	d := rand.Int63n(int64(common.WsTimeout - common.PingInterval - 5*time.Second))
+	t := time.NewTicker(common.PingInterval + time.Duration(d))
 	defer t.Stop()
 	for {
 		select {
@@ -78,9 +80,7 @@ func main() {
 		ctx, cancel := context.WithCancel(context.Background())
 		m[i] = cancel
 		go clientRoutine(ctx, i)
-		if i%100 == 0 {
-			time.Sleep(1 * time.Second)
-		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
@@ -88,9 +88,7 @@ func main() {
 	for i := 0; i < concurrentConnections; i++ {
 		cancel := m[i]
 		cancel()
-		if i%100 == 0 {
-			time.Sleep(1 * time.Second)
-		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	wg.Wait()
 }
