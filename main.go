@@ -13,12 +13,11 @@ import (
 	"time"
 )
 
-const (
-	// WebSocket 服务器的地址
-	wsURL = "ws://localhost:18080/ws"
-	// 压测的并发数
-	concurrentConnections = 15000
-)
+// WebSocket 服务器的地址
+var wsURLs = []string{"ws://[::1]:18080/ws", "ws://127.0.0.1:18080/ws"}
+
+// 压测的并发数
+const concurrentConnections = 30000
 
 // 客户端连接结构体
 type Client struct {
@@ -46,7 +45,7 @@ func (c *Client) readMessage(id int) {
 // 客户端逻辑
 func clientRoutine(ctx context.Context, id int) {
 	defer wg.Done()
-	url := fmt.Sprintf("%s?uid=%d&token=token", wsURL, id)
+	url := fmt.Sprintf("%s?uid=%d&token=token", wsURLs[id%len(wsURLs)], id)
 	c, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
 	if err != nil {
 		log.Printf("client %d: dial error: %v", id, err)
