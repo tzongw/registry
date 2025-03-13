@@ -1,10 +1,12 @@
 package base
 
 import (
+	log "github.com/sirupsen/logrus"
 	"hash/fnv"
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
@@ -111,6 +113,11 @@ func (m *Map[K, V]) Load(k K) (v V, ok bool) {
 }
 
 func (m *Map[K, V]) Range(f func(k K, v V) bool) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start)
+		log.Info("broadcast elapsed: ", duration)
+	}()
 	done := 0
 	for i := 0; i < len(m.shards); i++ {
 		if done >= 2048 {
