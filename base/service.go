@@ -94,6 +94,7 @@ func NewServiceClient(registry *Registry, service string, opt Options) *ServiceC
 		service:  service,
 		opt:      opt,
 		clients:  make(map[string]*AddrClient),
+		coolDown: make(map[string]time.Time),
 	}
 	registry.AddCallback(c.updateAddresses)
 	go c.reapCoolDown()
