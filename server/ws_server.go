@@ -34,7 +34,7 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 			log.Info("-- client count ", count)
 		}
 	}()
-	params := make(map[string]string)
+	params := make(map[string]string, len(r.Header)+len(r.URL.Query()))
 	for k := range r.Header {
 		params[k] = r.Header.Get(k)
 	}

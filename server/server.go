@@ -204,9 +204,7 @@ func (c *Client) writer() {
 	}
 }
 
-type Group struct {
-	*base.Map[*Client, struct{}]
-}
+type Group = *base.Map[*Client, struct{}]
 
 var groups = base.NewMap[string, Group](base.StringHash[string], 1024)
 
@@ -232,7 +230,7 @@ func joinGroup(connId, group string) error {
 	}
 	c.groups[group] = struct{}{}
 	groups.CreateOrOperate(group, func() Group {
-		g := Group{base.NewMap[*Client, struct{}](base.PointerHash[Client], groupShards)}
+		g := base.NewMap[*Client, struct{}](base.PointerHash[Client], groupShards)
 		g.Store(c, struct{}{})
 		return g
 	}, func(g Group) bool {
