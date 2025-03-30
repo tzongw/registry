@@ -115,7 +115,6 @@ func (c *ServiceClient) reapCoolDown() {
 }
 
 func (c *ServiceClient) updateAddresses() {
-	log.Infof("update %+v", c.service)
 	addresses := c.registry.Addresses(c.service)
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -123,6 +122,7 @@ func (c *ServiceClient) updateAddresses() {
 	for addr, cd := range c.coolDown {
 		if now.After(cd) {
 			delete(c.coolDown, addr)
+			log.Infof("- cool down %+v %+v", c.service, addr)
 		}
 	}
 	c.goodAddresses = nil
@@ -152,7 +152,7 @@ func (c *ServiceClient) addCoolDown(addr string) {
 	c.coolDown[addr] = time.Now().Add(CoolDown)
 	c.mu.Unlock()
 	if !ok {
-		log.Warnf("+ cool down %+v %+v", c.service, addr)
+		log.Errorf("+ cool down %+v %+v", c.service, addr)
 		c.updateAddresses()
 	}
 }
