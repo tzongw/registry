@@ -15,7 +15,7 @@ import (
 )
 
 var debug = flag.Bool("debug", false, "debug state")
-var addr = flag.String("addr", ":0", "ws service address")
+var addr = flag.String("addr", ":0", "http service address")
 
 func main() {
 	flag.Parse()
@@ -29,8 +29,8 @@ func main() {
 	log.SetReportCaller(true)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	common.Registry.Start(map[string]string{
-		common.RpcGate: server.RpcServe(),
-		common.WsGate:  server.WsServe(*addr),
+		common.RpcGate:  server.RpcServe(),
+		common.HttpGate: server.WsServe(*addr),
 	})
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
