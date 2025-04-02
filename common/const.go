@@ -8,7 +8,7 @@ const (
 	RpcPingStep  = 10
 	RpcUser      = "rpc_user"
 	RpcGate      = "rpc_gate"
-	WsGate       = "ws_gate"
+	HttpGate     = "http_gate"
 )
 
 var Services = []string{RpcUser}
