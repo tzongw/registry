@@ -78,14 +78,14 @@ func (c *AddrClient) Call(ctx context.Context, method string, args, result thrif
 var ErrUnavailable = errors.New("unavailable")
 
 type ServiceClient struct {
-	service        string
-	registry       *Registry
-	opt            Options
-	mu             sync.Mutex
-	clients        map[string]*AddrClient
-	localAddresses sort.StringSlice
-	goodAddresses  sort.StringSlice
-	coolDown       map[string]time.Time
+	service          string
+	registry         *Registry
+	opt              Options
+	mu               sync.Mutex
+	clients          map[string]*AddrClient
+	coolDown         map[string]time.Time
+	healthyAddresses sort.StringSlice // addresses not in cooldown
+	localAddresses   sort.StringSlice // healthy addresses with same host
 }
 
 func NewServiceClient(registry *Registry, service string, opt Options) *ServiceClient {
@@ -125,13 +125,13 @@ func (c *ServiceClient) updateAddresses() {
 			log.Infof("- cool down %+v %+v", c.service, addr)
 		}
 	}
-	c.goodAddresses = nil
+	c.healthyAddresses = nil
 	c.localAddresses = nil
 	for _, addr := range addresses {
 		if _, ok := c.coolDown[addr]; ok {
 			continue
 		}
-		c.goodAddresses = append(c.goodAddresses, addr)
+		c.healthyAddresses = append(c.healthyAddresses, addr)
 		host, _, _ := HostPort(addr)
 		if host == LocalIP {
 			c.localAddresses = append(c.localAddresses, addr)
@@ -179,7 +179,7 @@ func (c *ServiceClient) preferredAddresses() sort.StringSlice {
 	if len(c.localAddresses) > 0 {
 		return c.localAddresses
 	}
-	return c.goodAddresses
+	return c.healthyAddresses
 }
 
 func (c *ServiceClient) Call(ctx context.Context, method string, args, result thrift.TStruct) error {
