@@ -2,9 +2,6 @@ package main
 
 import (
 	"flag"
-	log "github.com/sirupsen/logrus"
-	"github.com/tzongw/registry/common"
-	"github.com/tzongw/registry/server"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -12,6 +9,10 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/tzongw/registry/common"
+	"github.com/tzongw/registry/server"
 )
 
 var debug = flag.Bool("debug", false, "debug state")
@@ -33,7 +34,7 @@ func main() {
 		common.HttpGate: server.WsServe(*addr),
 	})
 	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	<-ch
 	common.Registry.Stop()
 	time.Sleep(time.Second) // wait requests done
