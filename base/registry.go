@@ -152,7 +152,7 @@ func (s *Registry) run() {
 				log.Debug(m)
 				if timeout == RefreshInterval {
 					time.Sleep(10 * time.Millisecond) // exhaust all messages
-					timeout = time.Nanosecond         // timeout 0 will block forever
+					timeout = time.Millisecond        // timeout 0 will block forever
 				}
 			}
 		}
