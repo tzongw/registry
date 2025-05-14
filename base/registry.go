@@ -3,14 +3,15 @@ package base
 import (
 	"context"
 	"errors"
-	"github.com/redis/go-redis/v9"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"reflect"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/redis/go-redis/v9"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -114,34 +115,32 @@ func (s *Registry) AddCallback(cb func()) {
 }
 
 func (s *Registry) run() {
-	sub := s.redis.Subscribe(context.Background(), Prefix)
+	pubsub := s.redis.Subscribe(context.Background(), Prefix)
+	published := false
 	for {
 		if len(s.registered) > 0 && !s.stopped.Load() {
-			cmds, _ := s.redis.TxPipelined(context.Background(), func(p redis.Pipeliner) error {
+			_, err := s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
+				opt := &redis.HSetEXOptions{ExpirationType: redis.HSetEXExpirationEX, ExpirationVal: int64(TTL / time.Second)}
 				for name, addr := range s.registered {
 					key := fullKey(name)
-					p.HSet(context.Background(), key, addr, "")
-					p.HExpire(context.Background(), key, TTL, addr)
+					p.HSetEXWithArgs(context.Background(), key, opt, addr, "")
 				}
 				return nil
 			})
-			if s.stopped.Load() { // race
+			if err != nil {
+				log.Error(err)
+			} else if s.stopped.Load() { // race
 				s.unregister()
-			} else {
-				for i := 0; i < len(cmds); i += 2 {
-					intCmd := cmds[i].(*redis.IntCmd)
-					if added, err := intCmd.Result(); err == nil && added == 1 {
-						log.Info("publish ", s.registered)
-						s.redis.Publish(context.Background(), Prefix, "register")
-						break
-					}
-				}
+			} else if !published {
+				log.Info("publish ", s.registered)
+				s.redis.Publish(context.Background(), Prefix, "register")
+				published = true
 			}
 		}
 		s.refresh()
 		timeout := RefreshInterval
 		for {
-			if m, err := sub.ReceiveTimeout(context.Background(), timeout); err != nil {
+			if m, err := pubsub.ReceiveTimeout(context.Background(), timeout); err != nil {
 				var netErr net.Error
 				if !(errors.As(err, &netErr) && netErr.Timeout()) {
 					log.Error(err)
