@@ -47,7 +47,11 @@ func NewRegistry(redis *redis.Client, services []string) *Registry {
 func (s *Registry) Start(services map[string]string) {
 	log.Info("start ", services)
 	s.registered = services
-	s.unregister()
+	if len(services) > 0 {
+		s.register()
+		log.Info("publish ", services)
+		s.redis.Publish(context.Background(), Prefix, "register")
+	}
 	s.refresh()
 	go s.run()
 }
@@ -55,7 +59,9 @@ func (s *Registry) Start(services map[string]string) {
 func (s *Registry) Stop() {
 	log.Info("stop")
 	s.stopped.Store(true)
-	s.unregister()
+	if len(s.registered) > 0 {
+		s.unregister_and_notify()
+	}
 }
 
 func (s *Registry) Addresses(name string) sort.StringSlice {
@@ -64,18 +70,31 @@ func (s *Registry) Addresses(name string) sort.StringSlice {
 	return s.serviceMap[name]
 }
 
-func (s *Registry) unregister() {
-	log.Info("unregister")
-	if len(s.registered) == 0 {
-		return
+func (s *Registry) register() {
+	opt := &redis.HSetEXOptions{ExpirationType: redis.HSetEXExpirationEX, ExpirationVal: int64(TTL / time.Second)}
+	_, err := s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
+		for name, addr := range s.registered {
+			key := fullKey(name)
+			p.HSetEXWithArgs(context.Background(), key, opt, addr, "")
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
 	}
-	s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
+}
+
+func (s *Registry) unregister_and_notify() {
+	_, err := s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
 		for name, addr := range s.registered {
 			p.HDel(context.Background(), fullKey(name), addr)
 		}
 		p.Publish(context.Background(), Prefix, "unregister")
 		return nil
 	})
+	if err != nil {
+		log.Error(err)
+	}
 }
 
 func (s *Registry) refresh() {
@@ -116,25 +135,11 @@ func (s *Registry) AddCallback(cb func()) {
 
 func (s *Registry) run() {
 	pubsub := s.redis.Subscribe(context.Background(), Prefix)
-	published := false
 	for {
 		if len(s.registered) > 0 && !s.stopped.Load() {
-			_, err := s.redis.Pipelined(context.Background(), func(p redis.Pipeliner) error {
-				opt := &redis.HSetEXOptions{ExpirationType: redis.HSetEXExpirationEX, ExpirationVal: int64(TTL / time.Second)}
-				for name, addr := range s.registered {
-					key := fullKey(name)
-					p.HSetEXWithArgs(context.Background(), key, opt, addr, "")
-				}
-				return nil
-			})
-			if err != nil {
-				log.Error(err)
-			} else if s.stopped.Load() { // race
-				s.unregister()
-			} else if !published {
-				log.Info("publish ", s.registered)
-				s.redis.Publish(context.Background(), Prefix, "register")
-				published = true
+			s.register()
+			if s.stopped.Load() { // race
+				s.unregister_and_notify()
 			}
 		}
 		s.refresh()
