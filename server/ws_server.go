@@ -56,7 +56,7 @@ func WsServe(addr string) string {
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err = os.Chmod(addr, 0777); err != nil {
+		if err = os.Chmod(addr, 0700); err != nil {
 			log.Fatal(err)
 		}
 		log.Info("listen unix ", addr)
