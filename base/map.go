@@ -21,17 +21,18 @@ type Integer interface {
 }
 
 func IntegerHash[K Integer](k K) uint {
-	return uint(k)
+	const HASH_PRIME = 383
+	return uint(k) * HASH_PRIME
+}
+
+func PointerHash[T any](k *T) uint {
+	return IntegerHash(uintptr(unsafe.Pointer(k)))
 }
 
 func StringHash[K ~string](k K) uint {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(k))
 	return uint(h.Sum64())
-}
-
-func PointerHash[T any](k *T) uint {
-	return uint(uintptr(unsafe.Pointer(k)))
 }
 
 type Shard[K comparable, V any] struct {

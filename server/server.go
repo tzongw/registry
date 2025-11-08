@@ -16,7 +16,7 @@ const (
 	readWait       = common.WsTimeout
 	writeWait      = time.Second
 	maxMessageSize = 100 * 1024
-	groupShards    = 29 // prime number for pointer hash
+	groupShards    = 20
 )
 
 var clients = base.NewMap[string, *Client](base.StringHash[string], 512)
