@@ -172,10 +172,8 @@ func (c *Client) writer() {
 		c.mu.Lock()
 		if len(c.messages) == 0 {
 			c.writing = false
-			if cap(messages) <= 8 { // fit in cache line, reuse slice
-				for i := range messages {
-					messages[i] = nil
-				}
+			if cap(messages) <= 8 { // reuse small slice
+				clear(messages)
 				c.messages = messages[:0]
 			}
 			c.mu.Unlock()
