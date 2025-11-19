@@ -139,7 +139,7 @@ func (c *Client) SendText(content string) {
 }
 
 func (c *Client) SendBinary(content []byte) {
-	msg := &message{typ: websocket.TextMessage, content: []byte(content)}
+	msg := &message{typ: websocket.TextMessage, content: content}
 	c.sendMessage(msg)
 }
 
@@ -159,7 +159,7 @@ func (c *Client) writeOne(msg *message) bool {
 		return false
 	}
 	_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-	if err := c.conn.WriteMessage(int(msg.typ), msg.content); err != nil {
+	if err := c.conn.WriteMessage(msg.typ, msg.content); err != nil {
 		_ = c.conn.Close()
 		return false
 	}
