@@ -32,13 +32,11 @@ func findClient(connId string) (*Client, error) {
 }
 
 type message struct {
-	content    []byte
-	typ        int16
-	recyclable bool
+	typ     int
+	content []byte
 }
 
-var messagePool = sync.Pool{New: func() any { return &message{recyclable: true} }}
-var pongMessage = &message{typ: websocket.PongMessage}
+// var pongMessage = &message{typ: websocket.PongMessage}
 
 type Client struct {
 	id       string
@@ -136,16 +134,12 @@ func (c *Client) UnsetContext(key string, value string) {
 }
 
 func (c *Client) SendText(content string) {
-	var msg = messagePool.Get().(*message)
-	msg.typ = websocket.TextMessage
-	msg.content = []byte(content)
+	msg := &message{typ: websocket.TextMessage, content: []byte(content)}
 	c.sendMessage(msg)
 }
 
 func (c *Client) SendBinary(content []byte) {
-	var msg = messagePool.Get().(*message)
-	msg.typ = websocket.BinaryMessage
-	msg.content = content
+	msg := &message{typ: websocket.TextMessage, content: []byte(content)}
 	c.sendMessage(msg)
 }
 
@@ -163,12 +157,6 @@ func (c *Client) writeOne(msg *message) bool {
 	if msg == nil {
 		_ = c.conn.Close()
 		return false
-	}
-	if msg.recyclable {
-		defer func() {
-			msg.content = nil
-			messagePool.Put(msg)
-		}()
 	}
 	_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 	if err := c.conn.WriteMessage(int(msg.typ), msg.content); err != nil {

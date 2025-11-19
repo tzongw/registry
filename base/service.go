@@ -3,14 +3,15 @@ package base
 import (
 	"context"
 	"errors"
-	"github.com/apache/thrift/lib/go/thrift"
-	log "github.com/sirupsen/logrus"
 	"hash/fnv"
 	"math/rand"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/apache/thrift/lib/go/thrift"
+	log "github.com/sirupsen/logrus"
 )
 
 type client struct {
@@ -61,7 +62,7 @@ type AddrClient struct {
 
 func NewAddrClient(addr string, opt Options) *AddrClient {
 	return &AddrClient{
-		NewPool[*client](NewThriftFactory(addr, opt.Timeout), opt),
+		NewPool(NewThriftFactory(addr, opt.Timeout), opt),
 	}
 }
 
