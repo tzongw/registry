@@ -5,6 +5,7 @@ import (
 	"errors"
 	"hash/fnv"
 	"math/rand"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -139,7 +140,7 @@ func (c *ServiceClient) updateAddresses() {
 		}
 	}
 	for addr, client := range c.clients {
-		if !Contains(addresses, addr) {
+		if !slices.Contains(addresses, addr) {
 			log.Infof("close client %+v %+v", c.service, addr)
 			client.Close()
 			delete(c.clients, addr)
@@ -207,7 +208,7 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 	var addr string
 	if strings.HasPrefix(value, "addr:") {
 		addr = value[5:]
-		if _, ok := c.coolDown[addr]; ok && !Contains(c.registry.Addresses(c.service), addr) {
+		if _, ok := c.coolDown[addr]; ok && !slices.Contains(c.registry.Addresses(c.service), addr) {
 			return ErrUnavailable // cooling down unhealthy address
 		}
 	} else {

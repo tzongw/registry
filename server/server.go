@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -120,14 +122,16 @@ func (c *Client) context() map[string]string {
 func (c *Client) SetContext(key string, value string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.ctx = base.MergeMap(c.ctx, map[string]string{key: value}) // make a copy, DONT modify content
+	m := maps.Clone(c.ctx) // make a copy, DONT modify content
+	m[key] = value
+	c.ctx = m
 }
 
 func (c *Client) UnsetContext(key string, value string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if value == "" || c.ctx[key] == value {
-		m := base.MergeMap(c.ctx, nil) // make a copy, DONT modify content
+		m := maps.Clone(c.ctx) // make a copy, DONT modify content
 		delete(m, key)
 		c.ctx = m
 	}
@@ -260,7 +264,7 @@ func broadcastBinary(group string, exclude []string, content []byte) {
 func broadcastMessage(group string, exclude []string, msg *message) {
 	if group == "" { // broadcast to all clients
 		go clients.Range(func(_ string, c *Client) bool {
-			if !base.Contains(exclude, c.id) {
+			if !slices.Contains(exclude, c.id) {
 				c.sendMessage(msg)
 			}
 			return true
@@ -272,7 +276,7 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 		return
 	}
 	go g.Range(func(c *Client, _ struct{}) bool {
-		if !base.Contains(exclude, c.id) {
+		if !slices.Contains(exclude, c.id) {
 			c.sendMessage(msg)
 		}
 		return true
