@@ -3,8 +3,9 @@ package base
 import (
 	"context"
 	"errors"
+	"maps"
 	"net"
-	"reflect"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -94,12 +95,12 @@ func (s *Registry) refresh() {
 		name := s.services[i]
 		hkeysCmd := cmd.(*redis.StringSliceCmd)
 		keys := hkeysCmd.Val()
-		sort.Strings(keys) // DeepEqual needs
+		sort.Strings(keys) // slice equal
 		sm[name] = keys
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !reflect.DeepEqual(sm, s.serviceMap) {
+	if !maps.EqualFunc(sm, s.serviceMap, slices.Equal) {
 		log.Infof("update %+v -> %+v", s.serviceMap, sm)
 		s.serviceMap = sm
 		for _, cb := range s.afterRefresh {
