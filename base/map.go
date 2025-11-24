@@ -21,12 +21,11 @@ type Integer interface {
 }
 
 func IntegerHash[K Integer](k K) uint {
-	const HASH_PRIME = 383
-	return uint(k) * HASH_PRIME
+	return uint(k)
 }
 
 func PointerHash[T any](k *T) uint {
-	return IntegerHash(uintptr(unsafe.Pointer(k)))
+	return uint(uintptr(unsafe.Pointer(k))) >> 4
 }
 
 func StringHash[K ~string](k K) uint {
