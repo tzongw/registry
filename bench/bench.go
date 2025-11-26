@@ -3,14 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"log"
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
-var addr = flag.String("addr", "tx:3389", "http service address")
+var addr = flag.String("addr", ":18080", "http service address")
 
 func main() {
 	flag.Parse()
@@ -30,19 +31,25 @@ func main() {
 			c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 			if err != nil {
 				log.Println("dial:", err)
+				return
 			}
 			defer c.Close()
-
+			_, message, err := c.ReadMessage()
+			if err != nil {
+				log.Println("read:", err)
+				return
+			}
+			log.Printf("%d recv: %s", uid, message)
 			for {
-				_, message, err := c.ReadMessage()
+				time.Sleep(10 * time.Second)
+				err := c.WriteMessage(websocket.PingMessage, []byte{})
 				if err != nil {
 					log.Println("read:", err)
 					return
 				}
-				log.Printf("%d recv: %s", uid, message)
 			}
 		}(i)
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	wg.Wait()
 }
