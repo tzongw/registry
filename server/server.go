@@ -123,6 +123,9 @@ func (c *Client) SetContext(key string, value string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	m := maps.Clone(c.ctx) // make a copy, DONT modify content
+	if m == nil {
+		m = make(map[string]string)
+	}
 	m[key] = value
 	c.ctx = m
 }
