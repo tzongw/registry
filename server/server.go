@@ -48,8 +48,8 @@ type Client struct {
 	ctx      map[string]string
 	groups   map[string]struct{}
 	messages []*message
+	step     int8 // ping step
 	exiting  bool // client is exiting
-	step     int  // ping step
 }
 
 func newClient(id string, conn *websocket.Conn) *Client {
