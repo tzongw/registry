@@ -44,19 +44,18 @@ type Client struct {
 	id       string
 	conn     *websocket.Conn
 	mu       sync.Mutex
+	cond     sync.Cond
 	ctx      map[string]string
 	groups   map[string]struct{}
 	messages []*message
-	writing  bool // write goroutine is running
 	exiting  bool // client is exiting
 	step     int  // ping step
 }
 
 func newClient(id string, conn *websocket.Conn) *Client {
-	return &Client{
-		id:   id,
-		conn: conn,
-	}
+	c := &Client{id: id, conn: conn}
+	c.cond.L = &c.mu
+	return c
 }
 
 func (c *Client) Serve() {
@@ -65,6 +64,7 @@ func (c *Client) Serve() {
 		c.Stop()
 		_ = common.UserClient.Disconnect(ctx, rpcAddr, c.id, c.context())
 	}()
+	go c.writer()
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetPingHandler(func(appData string) error {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
@@ -148,47 +148,30 @@ func (c *Client) SendBinary(content []byte) {
 }
 
 func (c *Client) sendMessage(msg *message) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.cond.L.Lock()
+	defer c.cond.L.Unlock()
 	c.messages = append(c.messages, msg)
-	if !c.writing {
-		c.writing = true
-		go c.writer()
-	}
-}
-
-func (c *Client) writeOne(msg *message) bool {
-	if msg == nil {
-		_ = c.conn.Close()
-		return false
-	}
-	_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-	if err := c.conn.WriteMessage(msg.typ, msg.content); err != nil {
-		_ = c.conn.Close()
-		return false
-	}
-	return true
+	c.cond.Signal()
 }
 
 func (c *Client) writer() {
-	var messages []*message
 	for {
-		c.mu.Lock()
-		if len(c.messages) == 0 {
-			c.writing = false
-			if cap(messages) <= 8 { // reuse small slice
-				clear(messages)
-				c.messages = messages[:0]
-			}
-			c.mu.Unlock()
-			return
+		c.cond.L.Lock()
+		for len(c.messages) == 0 {
+			c.cond.Wait()
 		}
-		messages = c.messages
+		messages := c.messages
 		c.messages = nil
-		c.mu.Unlock()
+		c.cond.L.Unlock()
 		for _, m := range messages {
-			if !c.writeOne(m) {
-				return // keep writing status true
+			if m == nil { // stop
+				_ = c.conn.Close()
+				return
+			}
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(m.typ, m.content); err != nil {
+				_ = c.conn.Close()
+				return
 			}
 		}
 	}
