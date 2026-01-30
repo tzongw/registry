@@ -42,15 +42,19 @@ type Shard[K comparable, V any] struct {
 type Map[K comparable, V any] struct {
 	hash   func(k K) uint
 	shards []Shard[K, V]
+	mask   uint
 	size   atomic.Int64
 }
 
 func NewMap[K comparable, V any](hash func(k K) uint, shards uint) *Map[K, V] {
-	return &Map[K, V]{hash: hash, shards: make([]Shard[K, V], shards)}
+	if shards == 0 || shards&(shards-1) != 0 {
+		panic("shards should be power of 2")
+	}
+	return &Map[K, V]{hash: hash, shards: make([]Shard[K, V], shards), mask: shards - 1}
 }
 
 func (m *Map[K, V]) getShard(k K) *Shard[K, V] {
-	i := m.hash(k) % uint(len(m.shards))
+	i := m.hash(k) & m.mask
 	return &m.shards[i]
 }
 
