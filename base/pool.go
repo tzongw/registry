@@ -30,7 +30,6 @@ type Pool[T any] struct {
 	opt     Options
 	idleC   chan T
 	size    int
-	queue   int
 	closed  bool
 	mu      sync.Mutex
 }
@@ -58,18 +57,14 @@ func (p *Pool[T]) Close() {
 }
 
 func (p *Pool[T]) Get() (T, error) {
+	select {
+	case i := <-p.idleC:
+		return i, nil
+	default:
+	}
 	p.mu.Lock()
-	if len(p.idleC) > p.queue {
-		defer p.mu.Unlock()
-		return <-p.idleC, nil // NEVER block
-	} else if p.size >= p.opt.PoolSize {
-		p.queue++
+	if p.size >= p.opt.PoolSize {
 		p.mu.Unlock()
-		defer func() {
-			p.mu.Lock()
-			p.queue--
-			p.mu.Unlock()
-		}()
 		t := time.NewTimer(p.opt.Timeout)
 		select {
 		case i := <-p.idleC:
