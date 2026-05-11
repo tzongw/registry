@@ -3,6 +3,7 @@ package common
 import (
 	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/redis/go-redis/v9"
+	log "github.com/sirupsen/logrus"
 	"github.com/tzongw/registry/base"
 	"github.com/tzongw/registry/gen-go/service"
 )
@@ -22,6 +23,8 @@ var (
 	Registry   *base.Registry
 	UserClient *TUserClient
 	GateClient *TGateClient
+	UniqueId   *base.UniqueId
+	AppId      int
 )
 
 func NewUserClient(c *base.ServiceClient) *TUserClient {
@@ -46,6 +49,12 @@ func (c *TGateClient) ConnClient(addr string, f func(gate service.Gate) error) e
 
 func InitShared() {
 	Redis = redis.NewClient(&redis.Options{Addr: *redisAddr})
+	UniqueId = base.NewUniqueId(Redis)
+	var err error
+	AppId, err = UniqueId.Gen(*appName, 0, 1024)
+	if err != nil {
+		log.Fatal(err)
+	}
 	Registry = base.NewRegistry(Redis, Services)
 	UserClient = NewUserClient(base.NewServiceClient(Registry, RpcUser, base.PoolDefaultOptions()))
 	GateClient = NewGateClient(base.NewServiceClient(Registry, RpcGate, base.PoolDefaultOptions()))

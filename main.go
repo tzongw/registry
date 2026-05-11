@@ -41,5 +41,6 @@ func main() {
 	if strings.HasPrefix(*addr, "/") {
 		_ = os.Remove(*addr)
 	}
+	common.UniqueId.Stop()
 	log.Info("exit")
 }
