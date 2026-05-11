@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"github.com/apache/thrift/lib/go/thrift"
-	"service"
+	"github.com/tzongw/registry/gen-go/service"
 )
 
 var _ = service.GoUnusedProtection__
