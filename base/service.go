@@ -219,7 +219,7 @@ func (c *ServiceClient) Call(ctx context.Context, method string, args, result th
 		if strings.HasPrefix(value, "hint:") {
 			h := fnv.New64a()
 			hint := value[5:]
-			if _, err := h.Write([]byte(hint)); err != nil {
+			if _, err := h.Write(StringToBytes(hint)); err != nil {
 				return err
 			}
 			addr = addresses[h.Sum64()%uint64(len(addresses))]

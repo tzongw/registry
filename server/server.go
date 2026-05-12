@@ -141,7 +141,7 @@ func (c *Client) UnsetContext(key string, value string) {
 }
 
 func (c *Client) SendText(content string) {
-	msg := &message{typ: websocket.TextMessage, content: []byte(content)}
+	msg := &message{typ: websocket.TextMessage, content: base.StringToBytes(content)}
 	c.sendMessage(msg)
 }
 
@@ -240,7 +240,7 @@ func removeFromGroup(c *Client, group string) {
 }
 
 func broadcastText(group string, exclude []string, content string) {
-	broadcastMessage(group, exclude, &message{typ: websocket.TextMessage, content: []byte(content)})
+	broadcastMessage(group, exclude, &message{typ: websocket.TextMessage, content: base.StringToBytes(content)})
 }
 
 func broadcastBinary(group string, exclude []string, content []byte) {
