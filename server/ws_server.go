@@ -29,6 +29,7 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		log.Info("++ client count ", count)
 	}
 	defer func() {
+		clients.Delete(connId)
 		cleanClient(client)
 		if count := clients.Size(); count&(count-1) == 0 || count&255 == 0 {
 			log.Info("-- client count ", count)

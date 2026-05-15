@@ -270,7 +270,6 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 }
 
 func cleanClient(c *Client) {
-	clients.Delete(c.id)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.exiting = true // NO joinGroup after this
