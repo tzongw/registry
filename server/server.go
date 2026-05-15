@@ -231,7 +231,7 @@ func leaveGroup(connId, group string) error {
 	return nil
 }
 
-// ONLY use by leaveGroup & cleanClient; c MUST in group, so will NEVER create
+// ONLY used by leaveGroup & cleanClient; c MUST in group, so will NEVER create
 func removeFromGroup(c *Client, group string) {
 	groups.CreateOrOperate(group, nil, func(g Group) bool {
 		g.Delete(c)

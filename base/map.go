@@ -85,6 +85,10 @@ func (m *Map[K, V]) Delete(k K) {
 	}
 }
 
+// CreateOrOperate atomically creates or operates on a value for the given key.
+// If the key does not exist, create is called to initialize the value.
+// If the key exists, operate is called with the current value;
+// if operate returns true, the key is deleted from the map.
 func (m *Map[K, V]) CreateOrOperate(k K, create func() V, operate func(V) bool) {
 	shard := m.getShard(k)
 	shard.mu.Lock()
