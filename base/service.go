@@ -154,7 +154,7 @@ func (c *ServiceClient) addCoolDown(addr string) {
 	c.coolDown[addr] = time.Now().Add(CoolDown)
 	c.mu.Unlock()
 	if !ok {
-		log.Errorf("+ cool down %+v %+v", c.service, addr)
+		log.Infof("+ cool down %+v %+v", c.service, addr)
 		c.updateAddresses()
 	}
 }
