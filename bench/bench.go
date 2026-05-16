@@ -12,6 +12,7 @@ import (
 )
 
 var addr = flag.String("addr", ":18080", "http service address")
+var start = flag.Int("start", 0, "start uid")
 
 func main() {
 	flag.Parse()
@@ -41,14 +42,14 @@ func main() {
 			}
 			log.Printf("%d recv: %s", uid, message)
 			for {
-				time.Sleep(10 * time.Second)
+				time.Sleep(45 * time.Second)
 				err := c.WriteMessage(websocket.PingMessage, []byte{})
 				if err != nil {
 					log.Println("read:", err)
 					return
 				}
 			}
-		}(i)
+		}(*start + i)
 		time.Sleep(10 * time.Millisecond)
 	}
 	wg.Wait()
