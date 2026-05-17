@@ -13,16 +13,16 @@ import (
 
 var addr = flag.String("addr", ":18080", "http service address")
 var start = flag.Int("start", 0, "start uid")
+var count = flag.Int("count", 1000, "uid count")
 
 func main() {
 	flag.Parse()
 	log.SetFlags(0)
-	count := 10000
 	wg := sync.WaitGroup{}
-	wg.Add(count)
+	wg.Add(*count)
 	groupTick := time.NewTicker(10 * time.Millisecond)
 	defer groupTick.Stop()
-	for i := 0; i < count; i++ {
+	for i := range *count {
 		go func(uid int) {
 			defer wg.Done()
 			q := url.Values{}
