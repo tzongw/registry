@@ -20,6 +20,8 @@ func main() {
 	count := 10000
 	wg := sync.WaitGroup{}
 	wg.Add(count)
+	groupTick := time.NewTicker(10 * time.Millisecond)
+	defer groupTick.Stop()
 	for i := 0; i < count; i++ {
 		go func(uid int) {
 			defer wg.Done()
@@ -35,18 +37,46 @@ func main() {
 				return
 			}
 			defer c.Close()
-			_, message, err := c.ReadMessage()
-			if err != nil {
-				log.Println("read:", err)
-				return
-			}
-			log.Printf("%d recv: %s", uid, message)
+			go func() {
+				for {
+					_, m, err := c.ReadMessage()
+					if err != nil {
+						log.Println(uid, " read: ", err)
+						return
+					}
+					if uid == *start {
+						log.Println(string(m))
+					}
+				}
+			}()
+			pingTick := time.NewTicker(45 * time.Second)
+			defer pingTick.Stop()
+			joined := false
 			for {
-				time.Sleep(45 * time.Second)
-				err := c.WriteMessage(websocket.PingMessage, []byte{})
-				if err != nil {
-					log.Println("read:", err)
-					return
+				select {
+				case <-pingTick.C:
+					err := c.WriteMessage(websocket.PingMessage, []byte{})
+					if err != nil {
+						log.Println(uid, " write: ", err)
+						return
+					}
+				case <-groupTick.C:
+					var msg string
+					if joined {
+						msg = fmt.Sprintf("hello %d", uid)
+					} else {
+						time.Sleep(100 * time.Millisecond)
+						msg = "join"
+					}
+					err := c.WriteMessage(websocket.TextMessage, []byte(msg))
+					if err != nil {
+						log.Println(uid, " write: ", err)
+						return
+					}
+					if !joined {
+						joined = true
+						time.Sleep(100 * time.Millisecond)
+					}
 				}
 			}
 		}(*start + i)
