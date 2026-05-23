@@ -29,6 +29,7 @@ func main() {
 	var exit atomic.Bool
 	groupTick := time.NewTicker(time.Duration(*tick) * time.Millisecond)
 	defer groupTick.Stop()
+	var exitTick *time.Ticker
 	for i := range *count {
 		go func(uid int) {
 			defer wg.Done()
@@ -67,6 +68,9 @@ func main() {
 				if !joined || joinCount.Load() == int64(*count) {
 					ch = groupTick.C
 				}
+				if exit.Load() {
+					ch = exitTick.C
+				}
 				select {
 				case <-pingTick.C:
 					err := c.WriteMessage(websocket.PingMessage, []byte{})
@@ -104,6 +108,7 @@ func main() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	<-ch
+	exitTick = time.NewTicker(10 * time.Millisecond)
 	exit.Store(true)
 	wg.Wait()
 }
