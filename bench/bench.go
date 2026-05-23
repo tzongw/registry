@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"os"
+	"os/signal"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -23,6 +26,7 @@ func main() {
 	wg := sync.WaitGroup{}
 	wg.Add(*count)
 	var joinCount atomic.Int64
+	var exit atomic.Bool
 	groupTick := time.NewTicker(time.Duration(*tick) * time.Millisecond)
 	defer groupTick.Stop()
 	for i := range *count {
@@ -71,6 +75,10 @@ func main() {
 						return
 					}
 				case <-ch:
+					if exit.Load() {
+						c.Close()
+						return
+					}
 					var msg string
 					if joined {
 						msg = fmt.Sprintf("hello %d", uid)
@@ -93,5 +101,9 @@ func main() {
 		}(*start + i)
 		time.Sleep(10 * time.Millisecond)
 	}
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	<-ch
+	exit.Store(true)
 	wg.Wait()
 }
