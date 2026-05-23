@@ -44,17 +44,18 @@ type Client struct {
 	id       string
 	conn     *websocket.Conn
 	mu       sync.Mutex
-	cond     sync.Cond
 	ctx      map[string]string
 	groups   map[string]struct{}
+	step     int8       // ping step
+	exiting  bool       // client is exiting
+	condMu   sync.Mutex // fix broadcast deadlock
+	cond     sync.Cond
 	messages []*message
-	step     int8 // ping step
-	exiting  bool // client is exiting
 }
 
 func newClient(id string, conn *websocket.Conn) *Client {
 	c := &Client{id: id, conn: conn}
-	c.cond.L = &c.mu
+	c.cond.L = &c.condMu
 	return c
 }
 
