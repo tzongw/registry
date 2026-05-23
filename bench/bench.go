@@ -26,12 +26,12 @@ func main() {
 	wg := sync.WaitGroup{}
 	wg.Add(*count)
 	var joinCount atomic.Int64
-	var exit atomic.Bool
 	var groupTick *time.Ticker
 	if (*tick) > 0 {
 		groupTick = time.NewTicker(time.Duration(*tick) * time.Millisecond)
 		defer groupTick.Stop()
 	}
+	var exit atomic.Bool
 	var exitTick *time.Ticker
 	for i := range *count {
 		go func(uid int) {
@@ -45,7 +45,6 @@ func main() {
 			c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 			if err != nil {
 				log.Println("dial:", err)
-				// 连接失败也计入 joinCount，避免其余连接因此永远等待
 				joinCount.Add(1)
 				return
 			}
