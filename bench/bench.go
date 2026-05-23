@@ -27,7 +27,10 @@ func main() {
 	wg.Add(*count)
 	var joinCount atomic.Int64
 	var exit atomic.Bool
-	groupTick := time.NewTicker(time.Duration(*tick) * time.Millisecond)
+	var groupTick *time.Ticker
+	if (*tick) > 0 {
+		groupTick = time.NewTicker(time.Duration(*tick) * time.Millisecond)
+	}
 	defer groupTick.Stop()
 	var exitTick *time.Ticker
 	for i := range *count {
@@ -65,11 +68,10 @@ func main() {
 			joined := false
 			for {
 				var ch <-chan time.Time
-				if !joined || joinCount.Load() == int64(*count) {
-					ch = groupTick.C
-				}
 				if exit.Load() {
 					ch = exitTick.C
+				} else if !joined || joinCount.Load() == int64(*count) {
+					ch = groupTick.C
 				}
 				select {
 				case <-pingTick.C:
