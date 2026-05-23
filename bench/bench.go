@@ -30,8 +30,8 @@ func main() {
 	var groupTick *time.Ticker
 	if (*tick) > 0 {
 		groupTick = time.NewTicker(time.Duration(*tick) * time.Millisecond)
+		defer groupTick.Stop()
 	}
-	defer groupTick.Stop()
 	var exitTick *time.Ticker
 	for i := range *count {
 		go func(uid int) {
@@ -70,7 +70,7 @@ func main() {
 				var ch <-chan time.Time
 				if exit.Load() {
 					ch = exitTick.C
-				} else if !joined || joinCount.Load() == int64(*count) {
+				} else if groupTick != nil && (!joined || joinCount.Load() == int64(*count)) {
 					ch = groupTick.C
 				}
 				select {
