@@ -85,6 +85,7 @@ type ServiceClient struct {
 	opt              Options
 	mu               sync.Mutex
 	clients          map[string]*AddrClient
+	closing          map[string]time.Time
 	coolDown         map[string]time.Time
 	healthyAddresses sort.StringSlice // addresses not in cooldown
 	localAddresses   sort.StringSlice // healthy addresses with same host
@@ -96,19 +97,21 @@ func NewServiceClient(registry *Registry, service string, opt Options) *ServiceC
 		service:  service,
 		opt:      opt,
 		clients:  make(map[string]*AddrClient),
+		closing:  make(map[string]time.Time),
 		coolDown: make(map[string]time.Time),
 	}
 	registry.AddCallback(c.updateAddresses)
-	go c.reapCoolDown()
+	c.updateAddresses()
+	go c.reapExpired()
 	return c
 }
 
-func (c *ServiceClient) reapCoolDown() {
+func (c *ServiceClient) reapExpired() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
 		c.mu.Lock()
-		count := len(c.coolDown)
+		count := len(c.coolDown) + len(c.closing)
 		c.mu.Unlock()
 		if count > 0 {
 			c.updateAddresses()
@@ -121,8 +124,8 @@ func (c *ServiceClient) updateAddresses() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := time.Now()
-	for addr, cd := range c.coolDown {
-		if now.After(cd) {
+	for addr, at := range c.coolDown {
+		if now.After(at) {
 			delete(c.coolDown, addr)
 			log.Infof("- cool down %+v %+v", c.service, addr)
 		}
@@ -139,11 +142,26 @@ func (c *ServiceClient) updateAddresses() {
 			c.localAddresses = append(c.localAddresses, addr)
 		}
 	}
-	for addr, client := range c.clients {
-		if !slices.Contains(addresses, addr) {
-			log.Infof("close client %+v %+v", c.service, addr)
-			client.Close()
+	grace := CoolDown
+	for addr := range c.clients {
+		if slices.Contains(addresses, addr) {
+			continue
+		}
+		if _, ok := c.closing[addr]; ok {
+			continue
+		}
+		log.Infof("+ close delay %+v %+v after %+v", c.service, addr, grace)
+		c.closing[addr] = now.Add(grace)
+	}
+	for addr, at := range c.closing {
+		if now.Before(at) {
+			continue
+		}
+		log.Infof("close client %+v %+v", c.service, addr)
+		delete(c.closing, addr)
+		if client, ok := c.clients[addr]; ok {
 			delete(c.clients, addr)
+			client.Close()
 		}
 	}
 }
