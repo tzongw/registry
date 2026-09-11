@@ -142,6 +142,12 @@ func (c *ServiceClient) updateAddresses() {
 			c.localAddresses = append(c.localAddresses, addr)
 		}
 	}
+	for _, addr := range addresses {
+		if _, ok := c.closing[addr]; ok {
+			log.Infof("- close delay %+v %+v", c.service, addr)
+			delete(c.closing, addr)
+		}
+	}
 	grace := CoolDown
 	for addr := range c.clients {
 		if slices.Contains(addresses, addr) {
