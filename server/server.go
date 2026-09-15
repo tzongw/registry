@@ -21,7 +21,7 @@ const (
 	groupShards    = 32
 )
 
-var clients = base.NewMap[string, *Client](base.StringHash[string], 512)
+var clients = base.NewMap[string, *Client](base.StringHash[string], 256)
 
 var errNotExist = errors.New("not exist")
 
@@ -183,7 +183,7 @@ func (c *Client) writer() {
 
 type Group = *base.Map[*Client, struct{}]
 
-var groups = base.NewMap[string, Group](base.StringHash[string], 1024)
+var groups = base.NewMap[string, Group](base.StringHash[string], 512)
 
 var errAlreadyInGroup = errors.New("already in group")
 var errNotInGroup = errors.New("not in group")
