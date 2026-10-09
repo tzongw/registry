@@ -81,16 +81,16 @@ func (c *Client) Serve() {
 		switch typ {
 		case websocket.BinaryMessage:
 			if err = common.UserClient.RecvBinary(ctx, rpcAddr, c.id, c.context(), content); err != nil {
-				log.Errorf("service not available %+v", err)
+				log.Errorf("service not available %v", err)
 				return
 			}
 		case websocket.TextMessage:
 			if err = common.UserClient.RecvText(ctx, rpcAddr, c.id, c.context(), string(content)); err != nil {
-				log.Errorf("service not available %+v", err)
+				log.Errorf("service not available %v", err)
 				return
 			}
 		default:
-			log.Errorf("unknown message %+v, %+v", typ, content)
+			log.Errorf("unknown message %d, %q", typ, content)
 		}
 	}
 }
@@ -109,7 +109,7 @@ func (c *Client) handlePing(ctx context.Context) {
 	}
 	c.step = 0
 	if err := common.UserClient.Ping(ctx, rpcAddr, c.id, c.context()); err != nil {
-		log.Errorf("service not available %+v", err)
+		log.Errorf("service not available %v", err)
 		return
 	}
 }

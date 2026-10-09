@@ -127,7 +127,7 @@ func (c *ServiceClient) updateAddresses() {
 	for addr, at := range c.coolDown {
 		if now.After(at) {
 			delete(c.coolDown, addr)
-			log.Infof("- cool down %+v %+v", c.service, addr)
+			log.Infof("- cool down %s %s", c.service, addr)
 		}
 	}
 	c.healthyAddresses = nil
@@ -144,7 +144,7 @@ func (c *ServiceClient) updateAddresses() {
 	}
 	for _, addr := range addresses {
 		if _, ok := c.closing[addr]; ok {
-			log.Infof("- close delay %+v %+v", c.service, addr)
+			log.Infof("- close delay %s %s", c.service, addr)
 			delete(c.closing, addr)
 		}
 	}
@@ -156,14 +156,14 @@ func (c *ServiceClient) updateAddresses() {
 		if _, ok := c.closing[addr]; ok {
 			continue
 		}
-		log.Infof("+ close delay %+v %+v after %+v", c.service, addr, grace)
+		log.Infof("+ close delay %s %s after %v", c.service, addr, grace)
 		c.closing[addr] = now.Add(grace)
 	}
 	for addr, at := range c.closing {
 		if now.Before(at) {
 			continue
 		}
-		log.Infof("close client %+v %+v", c.service, addr)
+		log.Infof("close client %s %s", c.service, addr)
 		delete(c.closing, addr)
 		if client, ok := c.clients[addr]; ok {
 			delete(c.clients, addr)
@@ -178,7 +178,7 @@ func (c *ServiceClient) addCoolDown(addr string) {
 	c.coolDown[addr] = time.Now().Add(CoolDown)
 	c.mu.Unlock()
 	if !ok {
-		log.Infof("+ cool down %+v %+v", c.service, addr)
+		log.Infof("+ cool down %s %s", c.service, addr)
 		c.updateAddresses()
 	}
 }

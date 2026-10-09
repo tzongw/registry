@@ -26,13 +26,13 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	client := newClient(connId, conn)
 	clients.Store(connId, client)
 	if count := clients.Size(); count&(count-1) == 0 || count&255 == 0 {
-		log.Info("++ client count ", count)
+		log.Infof("++ clients %d, groups %d", count, groups.Size())
 	}
 	defer func() {
 		clients.Delete(connId)
 		cleanClient(client)
 		if count := clients.Size(); count&(count-1) == 0 || count&255 == 0 {
-			log.Info("-- client count ", count)
+			log.Infof("-- clients %d, groups %d", count, groups.Size())
 		}
 	}()
 	params := make(map[string]string, len(r.Header)+len(r.URL.Query()))
