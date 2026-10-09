@@ -85,7 +85,7 @@ func (c *Client) Serve() {
 				return
 			}
 		case websocket.TextMessage:
-			if err = common.UserClient.RecvText(ctx, rpcAddr, c.id, c.context(), string(content)); err != nil {
+			if err = common.UserClient.RecvText(ctx, rpcAddr, c.id, c.context(), base.BytesToString(content)); err != nil {
 				log.Errorf("service not available %v", err)
 				return
 			}

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/tzongw/registry/base"
 )
 
 var addr = flag.String("addr", ":18080", "http service address")
@@ -57,7 +58,7 @@ func main() {
 						return
 					}
 					if uid == *start {
-						log.Println(string(m))
+						log.Println(base.BytesToString(m))
 					}
 				}
 			}()
