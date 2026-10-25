@@ -25,7 +25,7 @@ func IntegerHash[K Integer](k K) uint {
 }
 
 func PointerHash[T any](k *T) uint {
-	return uint(uintptr(unsafe.Pointer(k))) >> 4
+	return uint(uintptr(unsafe.Pointer(k))) >> 3 // Align 8 bytes
 }
 
 func StringHash[K ~string](k K) uint {
