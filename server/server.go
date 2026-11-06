@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	readWait       = common.WsTimeout
-	writeWait      = time.Second
-	maxMessageSize = 100 * 1024
-	groupShards    = 32
+	readWait         = common.WsTimeout
+	writeWait        = time.Second
+	maxMessageSize   = 100 * 1024
+	maxMessageBufCap = 8
+	groupShards      = 32
 )
 
 var clients = base.NewMap[string, *Client](base.StringHash[string], 256)
@@ -159,15 +160,21 @@ func (c *Client) sendMessage(msg *message) {
 }
 
 func (c *Client) writer() {
+	var buf []*message
 	for {
 		c.cond.L.Lock()
+		if c.messages == nil && buf != nil && cap(buf) <= maxMessageBufCap {
+			clear(buf)
+			c.messages = buf[:0]
+		}
+		buf = nil
 		for len(c.messages) == 0 {
 			c.cond.Wait()
 		}
-		messages := c.messages
+		buf = c.messages
 		c.messages = nil
 		c.cond.L.Unlock()
-		for _, m := range messages {
+		for _, m := range buf {
 			if m == nil { // stop
 				_ = c.conn.Close()
 				return
