@@ -4,7 +4,6 @@ import (
 	"hash/fnv"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"unsafe"
 )
 
@@ -43,7 +42,6 @@ type Map[K comparable, V any] struct {
 	hash   func(k K) uint
 	shards []Shard[K, V]
 	mask   uint
-	size   atomic.Int64
 }
 
 func NewMap[K comparable, V any](hash func(k K) uint, shards uint) *Map[K, V] {
@@ -62,9 +60,6 @@ func (m *Map[K, V]) Store(k K, v V) {
 	shard := m.getShard(k)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
-	if _, ok := shard.m[k]; !ok {
-		m.size.Add(1)
-	}
 	if shard.m == nil {
 		shard.m = make(map[K]V)
 	}
@@ -75,38 +70,9 @@ func (m *Map[K, V]) Delete(k K) {
 	shard := m.getShard(k)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
-	if _, ok := shard.m[k]; !ok {
-		return
-	}
-	m.size.Add(-1)
 	delete(shard.m, k)
 	if len(shard.m) == 0 {
 		shard.m = nil
-	}
-}
-
-// CreateOrOperate atomically creates or operates on a value for the given key.
-// If the key does not exist, create is called to initialize the value.
-// If the key exists, operate is called with the current value;
-// if operate returns true, the key is deleted from the map.
-func (m *Map[K, V]) CreateOrOperate(k K, create func() V, operate func(V) bool) {
-	shard := m.getShard(k)
-	shard.mu.Lock()
-	defer shard.mu.Unlock()
-	if v, ok := shard.m[k]; ok {
-		if operate(v) {
-			delete(shard.m, k)
-			m.size.Add(-1)
-			if len(shard.m) == 0 {
-				shard.m = nil
-			}
-		}
-	} else {
-		if shard.m == nil {
-			shard.m = make(map[K]V)
-		}
-		shard.m[k] = create()
-		m.size.Add(1)
 	}
 }
 
@@ -136,8 +102,4 @@ func (m *Map[K, V]) Range(f func(k K, v V) bool) {
 		done += len(shard.m)
 		shard.mu.RUnlock()
 	}
-}
-
-func (m *Map[K, V]) Size() int64 {
-	return m.size.Load()
 }

@@ -6,6 +6,7 @@ import (
 	"maps"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -23,6 +24,7 @@ const (
 )
 
 var clients = base.NewMap[string, *Client](base.StringHash[string], 256)
+var clientCount atomic.Int64
 
 var errNotExist = errors.New("not exist")
 
@@ -188,9 +190,13 @@ func (c *Client) writer() {
 	}
 }
 
-type Group = *base.Map[*Client, struct{}]
+type Group struct {
+	count   int // member count, guarded by groupsMu
+	members *base.Map[*Client, struct{}]
+}
 
-var groups = base.NewMap[string, Group](base.StringHash[string], 512)
+var groupsMu sync.Mutex
+var groups = make(map[string]*Group)
 
 var errAlreadyInGroup = errors.New("already in group")
 var errNotInGroup = errors.New("not in group")
@@ -213,14 +219,16 @@ func joinGroup(connId, group string) error {
 		c.groups = make(map[string]struct{})
 	}
 	c.groups[group] = struct{}{}
-	groups.CreateOrOperate(group, func() Group {
-		g := base.NewMap[*Client, struct{}](base.PointerHash[Client], groupShards)
-		g.Store(c, struct{}{})
-		return g
-	}, func(g Group) bool {
-		g.Store(c, struct{}{})
-		return false
-	})
+	groupsMu.Lock()
+	g, ok := groups[group]
+	if !ok {
+		g = &Group{count: 1, members: base.NewMap[*Client, struct{}](base.PointerHash[Client], groupShards)}
+		groups[group] = g
+	} else {
+		g.count++ // keep g alive outside lock
+	}
+	groupsMu.Unlock()
+	g.members.Store(c, struct{}{})
 	return nil
 }
 
@@ -239,12 +247,16 @@ func leaveGroup(connId, group string) error {
 	return nil
 }
 
-// ONLY used by leaveGroup & cleanClient; c MUST in group, so will NEVER create
+// ONLY used by leaveGroup & cleanClient; c MUST in group, so g MUST exist
 func removeFromGroup(c *Client, group string) {
-	groups.CreateOrOperate(group, nil, func(g Group) bool {
-		g.Delete(c)
-		return g.Size() == 0
-	})
+	groupsMu.Lock()
+	g := groups[group]
+	g.count--
+	if g.count == 0 {
+		delete(groups, group)
+	}
+	groupsMu.Unlock()
+	g.members.Delete(c) // outside lock; harmless if group deleted
 }
 
 func broadcastText(group string, exclude []string, content string) {
@@ -265,11 +277,13 @@ func broadcastMessage(group string, exclude []string, msg *message) {
 		})
 		return
 	}
-	g, ok := groups.Load(group)
+	groupsMu.Lock()
+	g, ok := groups[group]
+	groupsMu.Unlock()
 	if !ok {
 		return
 	}
-	go g.Range(func(c *Client, _ struct{}) bool {
+	go g.members.Range(func(c *Client, _ struct{}) bool {
 		if !slices.Contains(exclude, c.id) {
 			c.sendMessage(msg)
 		}

@@ -25,14 +25,14 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	connId := uuid.New().String()
 	client := newClient(connId, conn)
 	clients.Store(connId, client)
-	if count := clients.Size(); count&(count-1) == 0 || count&255 == 0 {
-		log.Infof("++ clients %d, groups %d", count, groups.Size())
+	if count := clientCount.Add(1); count&(count-1) == 0 || count&255 == 0 {
+		log.Infof("++ clients %d", count)
 	}
 	defer func() {
 		clients.Delete(connId)
 		cleanClient(client)
-		if count := clients.Size(); count&(count-1) == 0 || count&255 == 0 {
-			log.Infof("-- clients %d, groups %d", count, groups.Size())
+		if count := clientCount.Add(-1); count&(count-1) == 0 || count&255 == 0 {
+			log.Infof("-- clients %d", count)
 		}
 	}()
 	params := make(map[string]string, len(r.Header)+len(r.URL.Query()))
