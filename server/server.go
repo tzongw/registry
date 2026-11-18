@@ -23,7 +23,7 @@ const (
 	groupShards      = 32
 )
 
-var clients = base.NewMap[string, *Client](base.StringHash[string], 256)
+var clients = base.NewMap[string, *Client](base.StringHash[string], 128)
 var clientCount atomic.Int64
 
 var errNotExist = errors.New("not exist")

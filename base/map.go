@@ -86,7 +86,7 @@ func (m *Map[K, V]) Load(k K) (v V, ok bool) {
 
 func (m *Map[K, V]) Range(f func(k K, v V) bool) {
 	done := 0
-	for i := 0; i < len(m.shards); i++ {
+	for i := range m.shards {
 		if done >= 2048 {
 			done = 0
 			runtime.Gosched()
