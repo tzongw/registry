@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	readWait         = common.WsTimeout
-	writeWait        = time.Second
-	maxMessageSize   = 100 * 1024
-	maxMessageBufCap = 8
-	groupShards      = 32
+	readWait              = common.WsTimeout
+	writeWait             = time.Second
+	maxMessageReadSize    = 100 * 1024
+	maxMessageBufReuseCap = 8
+	maxMessageSendCount   = 1024
+	groupShards           = 32
 )
 
 var clients = base.NewMap[string, *Client](base.StringHash[string], 128)
@@ -44,21 +45,24 @@ type message struct {
 // var pongMessage = &message{typ: websocket.PongMessage}
 
 type Client struct {
-	id       string
-	conn     *websocket.Conn
-	mu       sync.Mutex
-	ctx      map[string]string
-	groups   map[string]struct{}
-	step     int8       // ping step
-	exiting  bool       // client is exiting
-	condMu   sync.Mutex // fix broadcast deadlock
-	cond     sync.Cond
+	id      string
+	conn    *websocket.Conn
+	mu      sync.Mutex
+	ctx     map[string]string
+	groups  map[string]struct{}
+	step    int8 // ping step
+	exiting bool // client is exiting
+
+	// guarded by sendMu
+	sendMu   sync.Mutex // fix broadcast deadlock
+	sendCond sync.Cond
 	messages []*message
+	stopping bool // no more message accepted
 }
 
 func newClient(id string, conn *websocket.Conn) *Client {
 	c := &Client{id: id, conn: conn}
-	c.cond.L = &c.condMu
+	c.sendCond.L = &c.sendMu
 	return c
 }
 
@@ -69,7 +73,7 @@ func (c *Client) Serve() {
 		_ = common.UserClient.Disconnect(ctx, rpcAddr, c.id, c.context())
 	}()
 	go c.writer()
-	c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadLimit(maxMessageReadSize)
 	c.conn.SetPingHandler(func(appData string) error {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readWait))
 		c.handlePing(ctx)
@@ -155,27 +159,37 @@ func (c *Client) SendBinary(content []byte) {
 }
 
 func (c *Client) sendMessage(msg *message) {
-	c.cond.L.Lock()
-	defer c.cond.L.Unlock()
+	c.sendCond.L.Lock()
+	defer c.sendCond.L.Unlock()
+	if c.stopping {
+		return
+	}
 	c.messages = append(c.messages, msg)
-	c.cond.Signal()
+	if msg == nil {
+		c.stopping = true
+	} else if len(c.messages) >= maxMessageSendCount {
+		log.Warnf("client %s message buffer full (%d), close", c.id, len(c.messages))
+		c.messages = []*message{nil}
+		c.stopping = true
+	}
+	c.sendCond.Signal()
 }
 
 func (c *Client) writer() {
 	var buf []*message
 	for {
-		c.cond.L.Lock()
-		if c.messages == nil && buf != nil && cap(buf) <= maxMessageBufCap {
+		c.sendCond.L.Lock()
+		if c.messages == nil && buf != nil && cap(buf) <= maxMessageBufReuseCap {
 			clear(buf)
 			c.messages = buf[:0]
 		}
 		buf = nil
 		for len(c.messages) == 0 {
-			c.cond.Wait()
+			c.sendCond.Wait()
 		}
 		buf = c.messages
 		c.messages = nil
-		c.cond.L.Unlock()
+		c.sendCond.L.Unlock()
 		for _, m := range buf {
 			if m == nil { // stop
 				_ = c.conn.Close()
