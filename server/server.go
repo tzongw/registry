@@ -150,7 +150,7 @@ func (c *Client) SendText(content string) {
 }
 
 func (c *Client) SendBinary(content []byte) {
-	msg := &message{typ: websocket.TextMessage, content: content}
+	msg := &message{typ: websocket.BinaryMessage, content: content}
 	c.sendMessage(msg)
 }
 
